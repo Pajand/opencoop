@@ -5,7 +5,7 @@
 # اوپن‌کوپ
 
 ![OpenCOOP](https://img.shields.io/badge/OpenCOOP-v1.0.0-blue)
-![License](https://img.shields.io/badge/License-MIT-green)
+![License](https://img.shields.io/badge/License-Non--Commercial-blue)
 ![OpenCode](https://img.shields.io/badge/OpenCode-Plugin-purple)
 ![MCP](https://img.shields.io/badge/MCP-Streamable%20HTTP-orange)
 ![Node](https://img.shields.io/badge/Node.js-18+-black)
@@ -191,7 +191,9 @@ npm list -g @opencoop/opencode-plugin
 
 ## مجوز
 
-مجوز MIT
+لایسنس غیرتجاری اوپن‌کوپ - استفاده رایگان غیرتجاری، استفاده تجاری نیاز به اجازه دارد.
+
+جزئیات در فایل [LICENSE](LICENSE)
 
 ## نویسنده
 

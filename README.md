@@ -5,7 +5,7 @@
 # OpenCOOP
 
 ![OpenCOOP](https://img.shields.io/badge/OpenCOOP-v1.0.0-blue)
-![License](https://img.shields.io/badge/License-MIT-green)
+![License](https://img.shields.io/badge/License-Non--Commercial-blue)
 ![OpenCode](https://img.shields.io/badge/OpenCode-Plugin-purple)
 ![MCP](https://img.shields.io/badge/MCP-Streamable%20HTTP-orange)
 ![Node](https://img.shields.io/badge/Node.js-18+-black)
@@ -215,7 +215,9 @@ URL: http://localhost:31313
 
 ## License
 
-MIT License
+OpenCOOP Non-Commercial License - Free for non-commercial use, commercial use requires permission.
+
+See [LICENSE](LICENSE) file for details.
 
 ## Author
 
