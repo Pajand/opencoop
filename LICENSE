@@ -1,26 +1,178 @@
-# OpenCOOP
+OpenCOOP License Agreement
+==========================
 
-OpenCode plugin for team collaboration via shared MCP server.
+Copyright (c) 2026 Hamid Pajand <HamidPajand@gmail.com>
 
-## Quick Start
+This software is licensed under the OpenCOOP Non-Commercial License.
 
-```bash
-# Install
-npm install -g @opencoop/opencode-plugin
+1. DEFINITIONS
+--------------
 
-# Add to opencode.json
-# {
-#   "plugin": ["@opencoop/opencode-plugin"]
-# }
+"Software" refers to the OpenCOOP software, including all source code,
+documentation, and associated files.
 
-# Restart OpenCode
-# Open http://localhost:31313
-```
+"Commercial Use" means any use of the Software primarily intended for
+or directed toward commercial advantage or monetary compensation.
 
-## License
+"Non-Commercial Use" means use for personal, educational, research,
+or open-source purposes not primarily intended for commercial advantage.
 
-MIT
+2. PERMITTED USES (Non-Commercial)
+-----------------------------------
 
-## Author
+You are free to:
 
-Hamid Pajand
+a) Use, copy, modify, and distribute the Software for Non-Commercial
+   purposes without restriction.
+
+b) Create derivative works based on the Software for Non-Commercial
+   purposes.
+
+c) Use the Software in educational institutions, research projects,
+   or personal projects.
+
+d) Fork and modify the Software for learning and experimentation.
+
+3. COMMERCIAL USE RESTRICTIONS
+-------------------------------
+
+Commercial use of the Software is strictly prohibited without explicit
+written permission from the copyright holder.
+
+This includes, but is not limited to:
+
+a) Selling the Software or any derivative work.
+
+b) Using the Software as part of a commercial product or service.
+
+c) Using the Software to generate revenue, whether directly or indirectly.
+
+d) Offering the Software as a paid service or subscription.
+
+e) Including the Software in commercial consulting or development services.
+
+4. COMMERCIAL LICENSING
+------------------------
+
+To obtain a commercial license, you must:
+
+a) Contact the copyright holder at: HamidPajand@gmail.com
+
+b) Obtain explicit written permission before any commercial use.
+
+c) Pay any applicable licensing fees as agreed upon.
+
+5. ATTRIBUTION
+--------------
+
+You must retain the following in all copies or substantial portions
+of the Software:
+
+a) The original copyright notice.
+
+b) This license notice.
+
+c) A link to the original repository:
+   https://github.com/Pajand/opencoop
+
+6. DISCLAIMER OF WARRANTIES
+---------------------------
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+DEALINGS IN THE SOFTWARE.
+
+7. TERMINATION
+--------------
+
+This license terminates automatically if you breach any of its terms.
+Upon termination, you must cease all use of the Software and destroy
+all copies in your possession.
+
+8. GOVERNING LAW
+-----------------
+
+This agreement shall be governed by and construed in accordance with
+the laws of the Islamic Republic of Iran, without regard to its conflict
+of laws principles.
+
+9. CONTACT
+----------
+
+For commercial licensing inquiries, please contact:
+
+  Hamid Pajand
+  Email: HamidPajand@gmail.com
+  GitHub: https://github.com/Pajand
+
+---
+
+_FULL LICENSE TEXT (English):_
+
+OpenCOOP Non-Commercial License
+
+Copyright (c) 2026 Hamid Pajand
+
+Permission is hereby granted, free of charge, to any person obtaining a
+copy of this software and associated documentation files (the "Software"),
+to deal in the Software without restriction, including without limitation
+the rights to use, copy, modify, merge, publish, distribute, sublicense,
+and/or sell copies of the Software, subject to the following conditions:
+
+1. The above copyright notice and this permission notice shall be included
+   in all copies or substantial portions of the Software.
+
+2. Commercial use of the Software or any derivative work thereof is
+   prohibited without prior written permission from the copyright holder.
+   Commercial use includes but is not limited to: selling, using as part
+   of a commercial product or service, generating revenue, or offering
+   as a paid service.
+
+3. Non-commercial use, including personal, educational, research, and
+   open-source purposes, is permitted without restriction.
+
+4. Any commercial use requires an explicit written license from:
+   Hamid Pajand <HamidPajand@gmail.com>
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR
+OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+OTHER DEALINGS IN THE SOFTWARE.
+
+---
+
+_FULL LICENSE TEXT (Persian/فارسی):_
+
+لایسنس غیرتجاری اوپن‌کوپ
+
+حق چاپ (c) ۲۰۲۶ حمید پژند
+
+بدین وسیله به هر شخصی که نسخه‌ای از این نرم‌افزار و فایل‌های مستندات مرتبط («نرم‌افزار») را دریافت کند، اجازه داده می‌شود بدون محدودیت، از جمله بدون محدودیت به حقوق استفاده، کپی، تغییر، ادغام، انتشار، توزیع، صدور مجوز و/یا فروش نسخه‌هایی از نرم‌افزار، مشروط به شرایط زیر:
+
+1. اخطار حق چاپ بالا و این اجازه‌نامه باید در تمام نسخه‌ها یا بخش‌های اساسی نرم‌افزار درج شود.
+
+2. استفاده تجاری از نرم‌افزار یا هر اثر مشتقی از آن بدون اجازه کتبی قبلی از صاحب حق چاپ ممنوع است. استفاده تجاری شامل موارد زیر می‌شود: فروش، استفاده به عنوان بخشی از یک محصول یا خدمات تجاری، ایجاد درآمد، یا ارائه به عنوان خدمات پولی.
+
+3. استفاده غیرتجاری، از جمله اهداف شخصی، آموزشی، تحقیقاتی و متن‌باز، بدون محدودیت مجاز است.
+
+4. هرگونه استفاده تجاری نیاز به اجازه‌نامه کتبی صریح از:
+   حمید پژند <HamidPajand@gmail.com>
+   دارد.
+
+نرم‌افزار «همان‌طور که هست» ارائه می‌شود، بدون هیچ گونه ضمانتی، صریح یا ضمنی، از جمله اما نه محدود به ضمانت‌های قابلیت بازاریابی، تناسب برای یک هدف خاص و عدم نقض. در هیچ موردی نویسندگان یا صاحبان حق چاپ در قبال هیچ ادعا، خسارت یا مسئولیت دیگری، خواه در اقدام قراردادی، شبه‌جرم یا غیره، ناشی از یا در ارتباط با نرم‌افزار یا استفاده یا سایر معاملات در نرم‌افزار مسئول نیستند.
+
+---
+
+AUTHOR / نویسنده:
+
+  Hamid Pajand / حمید پژند
+  Email / ایمیل: HamidPajand@gmail.com
+  GitHub: https://github.com/Pajand
+  Repository / ریپازیتوری: https://github.com/Pajand/opencoop
