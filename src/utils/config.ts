@@ -1,10 +1,9 @@
 import { promises as fs } from "fs";
 import path from "path";
-import { fileURLToPath } from "url";
+import os from "os";
 import { ServerConfig } from "../types/index.js";
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const CONFIG_DIR = path.join(__dirname, "..", "..", "data");
+const CONFIG_DIR = path.join(os.homedir(), ".opencoop");
 const CONFIG_FILE = path.join(CONFIG_DIR, "config.json");
 
 export async function loadConfig(project?: any): Promise<ServerConfig> {
@@ -12,7 +11,6 @@ export async function loadConfig(project?: any): Promise<ServerConfig> {
     const data = await fs.readFile(CONFIG_FILE, "utf-8");
     return JSON.parse(data);
   } catch {
-    // Return default config
     return getDefaultConfig();
   }
 }

@@ -42,12 +42,15 @@ export class OpenCOOPServer {
     this.sessionManager = new SessionManager();
 
     // Initialize all tables
-    await this.lockManager.initialize();
-    await this.changeTracker.initialize();
-    await this.authManager.initialize();
-    await this.sessionManager.initialize();
-
-    logger.info("All managers initialized");
+    try {
+      await this.lockManager.initialize();
+      await this.changeTracker.initialize();
+      await this.authManager.initialize();
+      await this.sessionManager.initialize();
+      logger.info("All managers initialized");
+    } catch (error) {
+      logger.error("Error initializing managers: %s", error instanceof Error ? error.message : String(error));
+    }
   }
 
   private createMcpServer(): McpServer {
@@ -422,12 +425,10 @@ export class OpenCOOPServer {
     app.use(express.json());
     app.use(cors({ origin: true }));
 
-    // Health check
     app.get("/health", (req, res) => {
       res.json({ status: "ok", version: "1.0.0" });
     });
 
-    // MCP endpoint
     app.post("/mcp", async (req, res) => {
       try {
         const sessionId = req.headers["mcp-session-id"] as string | undefined;
@@ -505,10 +506,18 @@ export class OpenCOOPServer {
     const webApp = await createWebUI(this.config);
     app.use(webApp);
 
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
       this.httpServer = app.listen(port, () => {
         logger.info(`OpenCOOP server listening on port ${port}`);
         resolve();
+      });
+      this.httpServer.on("error", (err: any) => {
+        if (err.code === "EADDRINUSE") {
+          logger.error(`Port ${port} is already in use`);
+        } else {
+          logger.error("HTTP server error: %s", err.message);
+        }
+        reject(err);
       });
     });
   }
@@ -516,7 +525,6 @@ export class OpenCOOPServer {
   async stop(): Promise<void> {
     stopAutoSave();
 
-    // Close all transports
     for (const [sid, transport] of this.transports) {
       try {
         await transport.close();
@@ -526,14 +534,17 @@ export class OpenCOOPServer {
     }
     this.transports.clear();
 
-    // Close HTTP server
     if (this.httpServer) {
       this.httpServer.close();
+      this.httpServer = null;
     }
 
-    // Save and close database
     const { saveDatabase, closeDatabase } = await import("../utils/database.js");
-    await saveDatabase();
-    await closeDatabase();
+    try {
+      await saveDatabase();
+      await closeDatabase();
+    } catch {
+      // Ignore close errors
+    }
   }
 }

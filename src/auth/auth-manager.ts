@@ -18,6 +18,18 @@ export class AuthManager {
 
   async initialize(): Promise<void> {
     runQuery(`
+      CREATE TABLE IF NOT EXISTS workspaces (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        path TEXT NOT NULL,
+        owner_id TEXT NOT NULL,
+        mode TEXT DEFAULT 'host',
+        host_url TEXT,
+        created_at TEXT DEFAULT (datetime('now'))
+      )
+    `);
+
+    runQuery(`
       CREATE TABLE IF NOT EXISTS users (
         id TEXT PRIMARY KEY,
         email TEXT UNIQUE NOT NULL,

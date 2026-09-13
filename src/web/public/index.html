@@ -1,189 +1,442 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>OpenCOOP - Team Collaboration</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/assets/style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🤝</text></svg>">
 </head>
 <body>
-  <div class="app">
-    <nav class="sidebar">
-      <div class="logo">
-        <h1>OpenCOOP</h1>
-        <span>v1.0.0</span>
+  <div id="app" class="app">
+    <!-- LOADING SCREEN -->
+    <div id="loading-screen" class="loading-screen">
+      <div class="loader">
+        <div class="loader-ring"></div>
+        <div class="loader-ring"></div>
+        <div class="loader-ring"></div>
+        <div class="loader-logo">OC</div>
       </div>
-      <ul class="nav-links">
-        <li><a href="#" class="active" data-page="config">Config</a></li>
-        <li><a href="#" data-page="dashboard">Dashboard</a></li>
-        <li><a href="#" data-page="changes">Changes</a></li>
-        <li><a href="#" data-page="team">Team</a></li>
-        <li><a href="#" data-page="locks">Locks</a></li>
-      </ul>
-      <div class="nav-status">
-        <div class="status-dot" id="statusDot"></div>
-        <span id="statusText">Checking...</span>
+      <p class="loading-text">Initializing OpenCOOP...</p>
+    </div>
+
+    <!-- SIDEBAR -->
+    <nav class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <div class="logo-wrapper">
+          <div class="logo-icon">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+              <circle cx="9" cy="7" r="4"/>
+              <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+              <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+            </svg>
+          </div>
+          <div class="logo-text">
+            <h1>OpenCOOP</h1>
+            <span class="version">v1.0.0</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="sidebar-nav">
+        <a href="#" class="nav-item active" data-page="config" data-tooltip="Configuration">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+          </svg>
+          <span>Config</span>
+        </a>
+        <a href="#" class="nav-item" data-page="dashboard" data-tooltip="Dashboard">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
+          </svg>
+          <span>Dashboard</span>
+        </a>
+        <a href="#" class="nav-item" data-page="changes" data-tooltip="Changes">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/>
+          </svg>
+          <span>Changes</span>
+        </a>
+        <a href="#" class="nav-item" data-page="team" data-tooltip="Team">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+          </svg>
+          <span>Team</span>
+        </a>
+        <a href="#" class="nav-item" data-page="locks" data-tooltip="Locks">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+          </svg>
+          <span>Locks</span>
+        </a>
+      </div>
+
+      <div class="sidebar-footer">
+        <div class="connection-status" id="connectionStatus">
+          <div class="status-indicator"></div>
+          <span class="status-text">Connecting...</span>
+        </div>
       </div>
     </nav>
 
-    <main class="content">
-      <!-- CONFIG PAGE -->
-      <section id="page-config" class="page active">
-        <h2>Configuration</h2>
-
-        <div class="mode-selection">
-          <div class="mode-card" data-mode="host" onclick="selectMode('host')">
-            <div class="mode-icon">HOST</div>
-            <h3>HOST Mode</h3>
-            <p>Share your project folder with team members</p>
-          </div>
-          <div class="mode-card" data-mode="remote" onclick="selectMode('remote')">
-            <div class="mode-icon">REMOTE</div>
-            <h3>REMOTE Mode</h3>
-            <p>Connect to a host's shared project</p>
-          </div>
+    <!-- MAIN CONTENT -->
+    <main class="main-content" id="mainContent">
+      <!-- TOP BAR -->
+      <header class="topbar">
+        <button class="menu-toggle" id="menuToggle">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/>
+          </svg>
+        </button>
+        <div class="topbar-title" id="pageTitle">Configuration</div>
+        <div class="topbar-actions">
+          <button class="theme-toggle" id="themeToggle" title="Toggle theme">
+            <svg class="sun" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+            </svg>
+            <svg class="moon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+            </svg>
+          </button>
         </div>
+      </header>
 
-        <div id="host-config" class="config-section hidden">
-          <h3>HOST Settings</h3>
-          <div class="form-group">
-            <label>Project Folder Path:</label>
-            <div class="input-row">
-              <input type="text" id="workspace-path" placeholder="/path/to/your/project">
-              <button onclick="selectFolder()" class="btn-secondary">Browse</button>
+      <!-- PAGE CONTENT -->
+      <div class="page-container" id="pageContainer">
+
+        <!-- CONFIG PAGE -->
+        <section id="page-config" class="page active">
+          <div class="page-header">
+            <h2>Configuration</h2>
+            <p>Set up your collaboration mode and workspace settings</p>
+          </div>
+
+          <div class="mode-cards">
+            <div class="mode-card" data-mode="host" onclick="selectMode('host')">
+              <div class="mode-card-glow"></div>
+              <div class="mode-card-content">
+                <div class="mode-icon host">
+                  <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="2" y="2" width="20" height="8" rx="2" ry="2"/><rect x="2" y="14" width="20" height="8" rx="2" ry="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/>
+                  </svg>
+                </div>
+                <h3>HOST Mode</h3>
+                <p>Share your project folder with team members. They can view and edit files in real-time.</p>
+                <div class="mode-badge">Recommended</div>
+              </div>
+            </div>
+            <div class="mode-card" data-mode="remote" onclick="selectMode('remote')">
+              <div class="mode-card-glow"></div>
+              <div class="mode-card-content">
+                <div class="mode-icon remote">
+                  <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+                    <polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/>
+                  </svg>
+                </div>
+                <h3>REMOTE Mode</h3>
+                <p>Connect to a host's shared project. Access their workspace and collaborate.</p>
+                <div class="mode-badge secondary">Client</div>
+              </div>
             </div>
           </div>
-          <div class="form-group">
-            <label>Invite Link:</label>
-            <div class="input-row">
-              <input type="text" id="invite-link" readonly placeholder="Click Generate to create link">
-              <button onclick="copyInviteLink()" class="btn-secondary">Copy</button>
+
+          <div id="host-config" class="config-panel hidden">
+            <div class="panel-header">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="2" y="2" width="20" height="8" rx="2" ry="2"/><rect x="2" y="14" width="20" height="8" rx="2" ry="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/>
+              </svg>
+              <h3>HOST Settings</h3>
+            </div>
+            <div class="form-group">
+              <label>Project Folder Path</label>
+              <div class="input-group">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                </svg>
+                <input type="text" id="workspace-path" placeholder="/path/to/your/project">
+              </div>
+            </div>
+            <div class="form-group">
+              <label>Invite Link</label>
+              <div class="input-group">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+                </svg>
+                <input type="text" id="invite-link" readonly placeholder="Click Generate to create link">
+              </div>
+            </div>
+            <button class="btn btn-primary" onclick="generateInvite()">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+              </svg>
+              Generate Invite Link
+            </button>
+          </div>
+
+          <div id="remote-config" class="config-panel hidden">
+            <div class="panel-header">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+              </svg>
+              <h3>REMOTE Settings</h3>
+            </div>
+            <div class="form-group">
+              <label>Host Invite Link</label>
+              <div class="input-group">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+                </svg>
+                <input type="text" id="host-url" placeholder="http://host:31313/invite/TOKEN">
+              </div>
+            </div>
+            <button class="btn btn-primary" onclick="connectToHost()">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/>
+              </svg>
+              Connect to Host
+            </button>
+          </div>
+
+          <div class="save-bar" id="saveBar">
+            <button class="btn btn-success" onclick="saveConfig()">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/>
+              </svg>
+              Save Configuration
+            </button>
+          </div>
+        </section>
+
+        <!-- DASHBOARD PAGE -->
+        <section id="page-dashboard" class="page">
+          <div class="page-header">
+            <h2>Dashboard</h2>
+            <p>Real-time overview of your collaboration workspace</p>
+          </div>
+
+          <div class="stats-grid">
+            <div class="stat-card" data-stat="changes">
+              <div class="stat-icon">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
+                </svg>
+              </div>
+              <div class="stat-info">
+                <div class="stat-value" id="stat-total-changes">0</div>
+                <div class="stat-label">Total Changes</div>
+              </div>
+            </div>
+            <div class="stat-card" data-stat="online">
+              <div class="stat-icon green">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                </svg>
+              </div>
+              <div class="stat-info">
+                <div class="stat-value" id="stat-online-users">0</div>
+                <div class="stat-label">Online Users</div>
+              </div>
+            </div>
+            <div class="stat-card" data-stat="locks">
+              <div class="stat-icon orange">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                </svg>
+              </div>
+              <div class="stat-info">
+                <div class="stat-value" id="stat-active-locks">0</div>
+                <div class="stat-label">Active Locks</div>
+              </div>
+            </div>
+            <div class="stat-card" data-stat="team">
+              <div class="stat-icon purple">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+                </svg>
+              </div>
+              <div class="stat-info">
+                <div class="stat-value" id="stat-team-members">0</div>
+                <div class="stat-label">Team Members</div>
+              </div>
             </div>
           </div>
-          <button onclick="generateInvite()" class="btn-primary">Generate Invite Link</button>
-        </div>
 
-        <div id="remote-config" class="config-section hidden">
-          <h3>REMOTE Settings</h3>
-          <div class="form-group">
-            <label>Host Invite Link:</label>
-            <input type="text" id="host-url" placeholder="http://host:31313/invite/TOKEN">
-          </div>
-          <button onclick="connectToHost()" class="btn-primary">Connect to Host</button>
-        </div>
-
-        <button onclick="saveConfig()" class="btn-primary">Save Configuration</button>
-      </section>
-
-      <!-- DASHBOARD PAGE -->
-      <section id="page-dashboard" class="page">
-        <h2>Dashboard</h2>
-        <div class="stats-grid">
-          <div class="stat-card">
-            <div class="stat-value" id="stat-total-changes">0</div>
-            <div class="stat-label">Total Changes</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-value" id="stat-online-users">0</div>
-            <div class="stat-label">Online Users</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-value" id="stat-active-locks">0</div>
-            <div class="stat-label">Active Locks</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-value" id="stat-team-members">0</div>
-            <div class="stat-label">Team Members</div>
-          </div>
-        </div>
-
-        <div class="dashboard-grid">
-          <div class="card">
-            <h3>Recent Activity</h3>
-            <div id="recent-activity" class="activity-list"></div>
-          </div>
-          <div class="card">
-            <h3>Online Users</h3>
-            <div id="online-users" class="user-list"></div>
-          </div>
-          <div class="card">
-            <h3>Changes by User</h3>
-            <div id="changes-by-user" class="chart-container"></div>
-          </div>
-          <div class="card">
-            <h3>Active Locks</h3>
-            <div id="active-locks" class="lock-list"></div>
-          </div>
-        </div>
-      </section>
-
-      <!-- CHANGES PAGE -->
-      <section id="page-changes" class="page">
-        <h2>Change History</h2>
-        <div class="filters">
-          <input type="text" id="filter-file" placeholder="Filter by file...">
-          <input type="text" id="filter-user" placeholder="Filter by user...">
-          <select id="filter-action">
-            <option value="">All Actions</option>
-            <option value="read">Read</option>
-            <option value="create">Create</option>
-            <option value="update">Update</option>
-            <option value="delete">Delete</option>
-            <option value="move">Move</option>
-          </select>
-          <button onclick="loadChanges()" class="btn-secondary">Apply</button>
-        </div>
-        <div id="changes-list" class="changes-list"></div>
-      </section>
-
-      <!-- TEAM PAGE -->
-      <section id="page-team" class="page">
-        <h2>Team Management</h2>
-        <div class="card">
-          <h3>Invite New Member</h3>
-          <div class="form-row">
-            <input type="email" id="invite-email" placeholder="Email address">
-            <select id="invite-permissions">
-              <option value="read,write">Read + Write</option>
-              <option value="read">Read Only</option>
-              <option value="read,write,admin">Admin</option>
-            </select>
-            <input type="number" id="invite-days" placeholder="Days" value="7" min="1" max="365">
-            <button onclick="createInvite()" class="btn-primary">Generate Invite</button>
-          </div>
-          <div id="invite-result" class="invite-result hidden">
-            <label>Invite Link:</label>
-            <div class="input-row">
-              <input type="text" id="generated-invite" readonly>
-              <button onclick="copyGeneratedInvite()" class="btn-secondary">Copy</button>
+          <div class="dashboard-grid">
+            <div class="card card-lg">
+              <div class="card-header">
+                <h3>Recent Activity</h3>
+                <button class="btn btn-ghost btn-sm" onclick="loadDashboard()">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+                  </svg>
+                </button>
+              </div>
+              <div id="recent-activity" class="activity-list">
+                <div class="empty-state">
+                  <p>No activity yet</p>
+                </div>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-header">
+                <h3>Online Users</h3>
+              </div>
+              <div id="online-users" class="user-list">
+                <div class="empty-state">
+                  <p>No users online</p>
+                </div>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-header">
+                <h3>Active Locks</h3>
+              </div>
+              <div id="active-locks" class="lock-list">
+                <div class="empty-state">
+                  <p>No active locks</p>
+                </div>
+              </div>
             </div>
           </div>
-        </div>
+        </section>
 
-        <div class="card">
-          <h3>Team Members</h3>
-          <div id="team-members" class="member-list"></div>
-        </div>
-
-        <div class="card">
-          <h3>Online Users</h3>
-          <div id="team-online" class="user-list"></div>
-        </div>
-      </section>
-
-      <!-- LOCKS PAGE -->
-      <section id="page-locks" class="page">
-        <h2>File Locks</h2>
-        <div class="card">
-          <div class="card-header">
-            <h3>Active Locks</h3>
-            <button onclick="loadLocks()" class="btn-secondary">Refresh</button>
+        <!-- CHANGES PAGE -->
+        <section id="page-changes" class="page">
+          <div class="page-header">
+            <h2>Change History</h2>
+            <p>Track all modifications across your workspace</p>
           </div>
-          <div id="locks-list" class="locks-table"></div>
-        </div>
-      </section>
+
+          <div class="filters-bar">
+            <div class="filter-group">
+              <input type="text" id="filter-file" placeholder="Filter by file..." class="filter-input">
+              <input type="text" id="filter-user" placeholder="Filter by user..." class="filter-input">
+              <select id="filter-action" class="filter-select">
+                <option value="">All Actions</option>
+                <option value="read">Read</option>
+                <option value="create">Create</option>
+                <option value="update">Update</option>
+                <option value="delete">Delete</option>
+                <option value="move">Move</option>
+              </select>
+            </div>
+            <button onclick="loadChanges()" class="btn btn-primary btn-sm">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+              </svg>
+              Search
+            </button>
+          </div>
+
+          <div id="changes-list" class="changes-list">
+            <div class="empty-state">
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="opacity: 0.3">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
+              </svg>
+              <p>No changes recorded yet</p>
+            </div>
+          </div>
+        </section>
+
+        <!-- TEAM PAGE -->
+        <section id="page-team" class="page">
+          <div class="page-header">
+            <h2>Team Management</h2>
+            <p>Manage your team members and invitations</p>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <h3>Invite New Member</h3>
+            </div>
+            <div class="invite-form">
+              <div class="form-row">
+                <input type="email" id="invite-email" placeholder="Email address" class="form-input">
+                <select id="invite-permissions" class="form-select">
+                  <option value="read,write">Read + Write</option>
+                  <option value="read">Read Only</option>
+                  <option value="read,write,admin">Admin</option>
+                </select>
+                <input type="number" id="invite-days" placeholder="Days" value="7" min="1" max="365" class="form-input days-input">
+                <button onclick="createInvite()" class="btn btn-primary">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+                  </svg>
+                  Generate
+                </button>
+              </div>
+              <div id="invite-result" class="invite-result hidden">
+                <label>Invite Link:</label>
+                <div class="input-group">
+                  <input type="text" id="generated-invite" readonly>
+                  <button onclick="copyGeneratedInvite()" class="btn btn-secondary">Copy</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <h3>Team Members</h3>
+            </div>
+            <div id="team-members" class="member-list">
+              <div class="empty-state">
+                <p>No team members yet</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <h3>Online Now</h3>
+            </div>
+            <div id="team-online" class="user-list">
+              <div class="empty-state">
+                <p>No users online</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- LOCKS PAGE -->
+        <section id="page-locks" class="page">
+          <div class="page-header">
+            <h2>File Locks</h2>
+            <p>Manage exclusive file locks to prevent conflicts</p>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <h3>Active Locks</h3>
+              <button class="btn btn-ghost btn-sm" onclick="loadLocks()">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+                </svg>
+                Refresh
+              </button>
+            </div>
+            <div id="locks-list" class="locks-table">
+              <div class="empty-state">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="opacity: 0.3">
+                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                </svg>
+                <p>No active locks</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+      </div>
     </main>
   </div>
+
+  <!-- TOAST NOTIFICATIONS -->
+  <div id="toast-container" class="toast-container"></div>
 
   <script src="/assets/app.js"></script>
 </body>

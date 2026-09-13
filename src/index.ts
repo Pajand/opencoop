@@ -12,7 +12,6 @@ const server = async (input: PluginInput, options?: Record<string, unknown>): Pr
     const config = await loadConfig(input.project);
     const port = config.port || 31313;
 
-    // Start the MCP server
     serverInstance = new OpenCOOPServer(config);
     await serverInstance.startHttp(port);
 
@@ -20,14 +19,20 @@ const server = async (input: PluginInput, options?: Record<string, unknown>): Pr
     logger.info("MCP endpoint: http://localhost:%d/mcp", port);
     logger.info("Web UI: http://localhost:%d", port);
   } catch (error) {
-    logger.error("Failed to start OpenCOOP: %s", error instanceof Error ? error.message : String(error));
+    const msg = error instanceof Error ? error.message : String(error);
+    logger.error("Failed to start OpenCOOP: %s", msg);
+    console.error("[OpenCOOP] Failed to start:", msg);
   }
 
   return {
     dispose: async () => {
       logger.info("OpenCOOP plugin disposing...");
       if (serverInstance) {
-        await serverInstance.stop();
+        try {
+          await serverInstance.stop();
+        } catch {
+          // Ignore stop errors
+        }
         serverInstance = null;
       }
     },

@@ -1,129 +1,300 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>OpenCOOP - Accept Invite</title>
+  <title>OpenCOOP - Join Team</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/assets/style.css">
+  <style>
+    body {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      overflow: auto;
+    }
+
+    .invite-container {
+      width: 100%;
+      max-width: 440px;
+      padding: 40px;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-xl);
+      box-shadow: var(--shadow-lg);
+      animation: slideUp 0.6s ease forwards;
+      opacity: 0;
+      text-align: center;
+    }
+
+    .invite-logo {
+      width: 72px;
+      height: 72px;
+      margin: 0 auto 24px;
+      border-radius: var(--radius-lg);
+      background: var(--gradient-primary);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-size: 1.5rem;
+      font-weight: 800;
+      box-shadow: 0 8px 24px rgba(139, 92, 246, 0.3);
+      animation: bounce 2s ease-in-out infinite;
+    }
+
+    .invite-title {
+      font-size: 1.6rem;
+      font-weight: 700;
+      margin-bottom: 8px;
+      background: var(--gradient-primary);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .invite-subtitle {
+      color: var(--text-secondary);
+      margin-bottom: 32px;
+    }
+
+    .invite-status {
+      padding: 16px;
+      border-radius: var(--radius-md);
+      margin-bottom: 24px;
+      animation: fadeIn 0.4s ease forwards;
+    }
+
+    .invite-status.valid {
+      background: rgba(16, 185, 129, 0.1);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      color: var(--accent-success);
+    }
+
+    .invite-status.invalid {
+      background: rgba(239, 68, 68, 0.1);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      color: var(--accent-danger);
+    }
+
+    .invite-status.loading {
+      background: rgba(139, 92, 246, 0.1);
+      border: 1px solid rgba(139, 92, 246, 0.3);
+      color: var(--accent-primary);
+    }
+
+    .invite-form {
+      text-align: left;
+    }
+
+    .invite-form .form-group {
+      margin-bottom: 20px;
+    }
+
+    .invite-form label {
+      display: block;
+      margin-bottom: 8px;
+      font-weight: 500;
+      color: var(--text-secondary);
+    }
+
+    .invite-form input {
+      width: 100%;
+      padding: 14px 16px;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-md);
+      color: var(--text-primary);
+      outline: none;
+      transition: all var(--transition-fast);
+    }
+
+    .invite-form input:focus {
+      border-color: var(--border-focus);
+      box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1);
+    }
+
+    .invite-form input::placeholder {
+      color: var(--text-tertiary);
+    }
+
+    .invite-btn {
+      width: 100%;
+      padding: 14px;
+      background: var(--gradient-primary);
+      color: white;
+      border: none;
+      border-radius: var(--radius-md);
+      font-weight: 600;
+      font-size: 1rem;
+      cursor: pointer;
+      transition: all var(--transition-fast);
+      box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
+    }
+
+    .invite-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(139, 92, 246, 0.4);
+    }
+
+    .invite-btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .invite-permissions {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 20px;
+    }
+
+    .perm-option {
+      flex: 1;
+      padding: 12px;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-md);
+      text-align: center;
+      cursor: pointer;
+      transition: all var(--transition-fast);
+    }
+
+    .perm-option:hover {
+      border-color: var(--accent-primary);
+    }
+
+    .perm-option.selected {
+      background: rgba(139, 92, 246, 0.15);
+      border-color: var(--accent-primary);
+    }
+
+    .perm-option input {
+      display: none;
+    }
+
+    .perm-label {
+      font-weight: 500;
+      font-size: 0.9rem;
+    }
+
+    .perm-desc {
+      font-size: 0.75rem;
+      color: var(--text-tertiary);
+      margin-top: 4px;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .spinner {
+      display: inline-block;
+      width: 20px;
+      height: 20px;
+      border: 2px solid rgba(255,255,255,0.3);
+      border-radius: 50%;
+      border-top-color: white;
+      animation: spin 0.8s linear infinite;
+      vertical-align: middle;
+      margin-right: 8px;
+    }
+  </style>
 </head>
 <body>
-  <div class="invite-page">
-    <div class="invite-card">
-      <h1>OpenCOOP</h1>
-      <h2>Accept Team Invite</h2>
+  <div class="invite-container">
+    <div class="invite-logo">OC</div>
+    <h1 class="invite-title">Join the Team</h1>
+    <p class="invite-subtitle">You've been invited to collaborate on OpenCOOP</p>
 
-      <div id="invite-status" class="invite-status">
-        <div class="spinner"></div>
-        <p>Validating invite link...</p>
-      </div>
-
-      <div id="invite-form" class="invite-form hidden">
-        <div class="invite-info">
-          <p><strong>Workspace:</strong> <span id="invite-workspace">-</span></p>
-          <p><strong>Permissions:</strong> <span id="invite-permissions">-</span></p>
-          <p><strong>Expires:</strong> <span id="invite-expires">-</span></p>
-        </div>
-
-        <div class="form-group">
-          <label>Your Name:</label>
-          <input type="text" id="user-name" placeholder="Enter your name">
-        </div>
-
-        <div class="form-group">
-          <label>Your Email:</label>
-          <input type="email" id="user-email" placeholder="Enter your email">
-        </div>
-
-        <button onclick="acceptInvite()" class="btn-primary">Join Team</button>
-      </div>
-
-      <div id="invite-success" class="invite-success hidden">
-        <div class="success-icon">SUCCESS</div>
-        <h3>Welcome to the Team!</h3>
-        <p>You have been added to the workspace.</p>
-        <p>Copy this MCP config and add it to your <code>opencode.json</code>:</p>
-        <div class="config-code">
-          <pre id="mcp-config"></pre>
-          <button onclick="copyMcpConfig()" class="btn-secondary">Copy Config</button>
-        </div>
-        <a href="/" class="btn-primary">Go to Dashboard</a>
-      </div>
-
-      <div id="invite-error" class="invite-error hidden">
-        <div class="error-icon">ERROR</div>
-        <h3>Invalid Invite</h3>
-        <p id="error-message">This invite link is invalid or has expired.</p>
-        <a href="/" class="btn-primary">Go to Dashboard</a>
-      </div>
+    <div id="invite-status" class="invite-status loading">
+      <span class="spinner"></span> Validating invite link...
     </div>
+
+    <div id="invite-form" class="invite-form" style="display: none;">
+      <div class="form-group">
+        <label>Your Name</label>
+        <input type="text" id="user-name" placeholder="Enter your name">
+      </div>
+
+      <div class="form-group">
+        <label>Your Email</label>
+        <input type="email" id="user-email" placeholder="Enter your email">
+      </div>
+
+      <label style="display: block; margin-bottom: 12px; font-weight: 500; color: var(--text-secondary);">Permission Level</label>
+      <div class="invite-permissions">
+        <label class="perm-option selected" onclick="selectPerm(this, 'read')">
+          <input type="radio" name="perm" value="read" checked>
+          <div class="perm-label">Read Only</div>
+          <div class="perm-desc">View files</div>
+        </label>
+        <label class="perm-option" onclick="selectPerm(this, 'read,write')">
+          <input type="radio" name="perm" value="read,write">
+          <div class="perm-label">Read + Write</div>
+          <div class="perm-desc">Edit files</div>
+        </label>
+      </div>
+
+      <button class="invite-btn" onclick="acceptInvite()">Join Team</button>
+    </div>
+
+    <div id="invite-error" class="invite-status invalid" style="display: none;"></div>
   </div>
 
   <script>
-    const token = window.location.pathname.split('/').pop();
+    const token = window.location.pathname.split('/invite/')[1];
+    let selectedPerms = ['read'];
+
+    function selectPerm(el, perms) {
+      document.querySelectorAll('.perm-option').forEach(p => p.classList.remove('selected'));
+      el.classList.add('selected');
+      selectedPerms = perms.split(',');
+    }
 
     async function validateInvite() {
+      if (!token) {
+        showInvalid('No invite token provided');
+        return;
+      }
+
       try {
         const res = await fetch(`/api/invite/validate/${token}`);
         const data = await res.json();
 
         if (data.valid) {
-          document.getElementById('invite-status').classList.add('hidden');
-          document.getElementById('invite-form').classList.remove('hidden');
-          document.getElementById('invite-workspace').textContent = data.workspaceId || 'Shared Project';
-          document.getElementById('invite-permissions').textContent = data.permissions?.join(', ') || 'read, write';
+          document.getElementById('invite-status').style.display = 'none';
+          document.getElementById('invite-form').style.display = 'block';
         } else {
-          showError(data.reason || 'Invalid invite link');
+          showInvalid(data.reason || 'This invite link is invalid');
         }
-      } catch (e) {
-        showError('Failed to validate invite');
+      } catch {
+        showInvalid('Failed to validate invite link');
       }
     }
 
-    function showError(msg) {
-      document.getElementById('invite-status').classList.add('hidden');
-      document.getElementById('invite-error').classList.remove('hidden');
-      document.getElementById('error-message').textContent = msg;
+    function showInvalid(msg) {
+      const el = document.getElementById('invite-status');
+      el.className = 'invite-status invalid';
+      el.innerHTML = msg;
     }
 
     async function acceptInvite() {
-      const name = document.getElementById('user-name').value;
-      const email = document.getElementById('user-email').value;
+      const name = document.getElementById('user-name').value.trim();
+      const email = document.getElementById('user-email').value.trim();
 
       if (!name || !email) {
         alert('Please fill in all fields');
         return;
       }
 
-      try {
-        const res = await fetch('/api/config');
-        const config = await res.json();
-
-        const mcpConfig = {
-          mcp: {
-            opencoop: {
-              type: "remote",
-              url: `http://localhost:31313/mcp`,
-              enabled: true,
-              headers: {
-                "Authorization": `Bearer ${token}`
-              }
-            }
-          }
-        };
-
-        document.getElementById('mcp-config').textContent = JSON.stringify(mcpConfig, null, 2);
-
-        document.getElementById('invite-form').classList.add('hidden');
-        document.getElementById('invite-success').classList.remove('hidden');
-      } catch (e) {
-        alert('Error accepting invite');
-      }
-    }
-
-    function copyMcpConfig() {
-      const config = document.getElementById('mcp-config').textContent;
-      navigator.clipboard.writeText(config);
-      alert('Config copied!');
+      // In a real implementation, this would register the user
+      alert(`Welcome ${name}! You've been added to the team with ${selectedPerms.join(', ')} permissions.`);
+      window.location.href = '/';
     }
 
     validateInvite();

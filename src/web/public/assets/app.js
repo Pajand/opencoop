@@ -1,96 +1,216 @@
-// ==================== STATE ====================
-let currentPage = 'config';
-let currentMode = null;
+// ============================================
+// OpenCOOP - Main Application
+// ============================================
 
-// ==================== NAVIGATION ====================
-document.querySelectorAll('.nav-links a').forEach(link => {
-  link.addEventListener('click', (e) => {
-    e.preventDefault();
-    const page = link.dataset.page;
-    navigateTo(page);
-  });
+const API = '';
+let currentPage = 'config';
+let currentConfig = { mode: null, workspacePath: '' };
+
+// ============================================
+// Initialization
+// ============================================
+
+document.addEventListener('DOMContentLoaded', () => {
+  initNavigation();
+  initThemeToggle();
+  initMenuToggle();
+  checkStatus();
+  loadConfig();
+
+  // Auto-refresh status
+  setInterval(checkStatus, 10000);
 });
 
+// ============================================
+// Navigation
+// ============================================
+
+function initNavigation() {
+  document.querySelectorAll('.nav-item').forEach(item => {
+    item.addEventListener('click', (e) => {
+      e.preventDefault();
+      const page = item.dataset.page;
+      navigateTo(page);
+    });
+  });
+}
+
 function navigateTo(page) {
-  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-  document.querySelectorAll('.nav-links a').forEach(a => a.classList.remove('active'));
-
-  document.getElementById(`page-${page}`)?.classList.add('active');
-  document.querySelector(`[data-page="${page}"]`)?.classList.add('active');
-
   currentPage = page;
+
+  // Update nav items
+  document.querySelectorAll('.nav-item').forEach(item => {
+    item.classList.toggle('active', item.dataset.page === page);
+  });
+
+  // Update pages with animation
+  document.querySelectorAll('.page').forEach(p => {
+    if (p.id === `page-${page}`) {
+      p.classList.add('active');
+      p.style.animation = 'none';
+      p.offsetHeight; // Trigger reflow
+      p.style.animation = 'slideUp 0.4s ease forwards';
+    } else {
+      p.classList.remove('active');
+    }
+  });
+
+  // Update page title
+  const titles = {
+    config: 'Configuration',
+    dashboard: 'Dashboard',
+    changes: 'Change History',
+    team: 'Team Management',
+    locks: 'File Locks'
+  };
+  document.getElementById('pageTitle').textContent = titles[page] || page;
+
+  // Load page data
   loadPageData(page);
+
+  // Close mobile menu
+  document.getElementById('sidebar').classList.remove('open');
 }
 
-async function loadPageData(page) {
+function loadPageData(page) {
   switch (page) {
-    case 'dashboard': await loadDashboard(); break;
-    case 'changes': await loadChanges(); break;
-    case 'team': await loadTeam(); break;
-    case 'locks': await loadLocks(); break;
-    case 'config': await loadConfig(); break;
+    case 'dashboard':
+      loadDashboard();
+      break;
+    case 'changes':
+      loadChanges();
+      break;
+    case 'team':
+      loadTeam();
+      break;
+    case 'locks':
+      loadLocks();
+      break;
   }
 }
 
-// ==================== STATUS CHECK ====================
+// ============================================
+// Theme Toggle
+// ============================================
+
+function initThemeToggle() {
+  const theme = localStorage.getItem('opencoop-theme') || 'dark';
+  document.documentElement.dataset.theme = theme;
+
+  document.getElementById('themeToggle').addEventListener('click', () => {
+    const current = document.documentElement.dataset.theme;
+    const next = current === 'dark' ? 'light' : 'dark';
+    document.documentElement.dataset.theme = next;
+    localStorage.setItem('opencoop-theme', next);
+  });
+}
+
+// ============================================
+// Mobile Menu
+// ============================================
+
+function initMenuToggle() {
+  document.getElementById('menuToggle').addEventListener('click', () => {
+    document.getElementById('sidebar').classList.toggle('open');
+  });
+}
+
+// ============================================
+// Toast Notifications
+// ============================================
+
+function showToast(type, title, message, duration = 4000) {
+  const container = document.getElementById('toast-container');
+  const toast = document.createElement('div');
+  toast.className = `toast ${type}`;
+
+  const icons = {
+    success: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>',
+    error: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>',
+    warning: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>',
+    info: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>'
+  };
+
+  toast.innerHTML = `
+    <div class="toast-icon">${icons[type]}</div>
+    <div class="toast-content">
+      <div class="toast-title">${title}</div>
+      ${message ? `<div class="toast-message">${message}</div>` : ''}
+    </div>
+    <button class="toast-close" onclick="this.parentElement.remove()">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+  `;
+
+  container.appendChild(toast);
+
+  setTimeout(() => {
+    toast.classList.add('removing');
+    setTimeout(() => toast.remove(), 300);
+  }, duration);
+}
+
+// ============================================
+// Status Check
+// ============================================
+
 async function checkStatus() {
+  const el = document.getElementById('connectionStatus');
   try {
-    const res = await fetch('/api/status');
-    const data = await res.json();
-
-    document.getElementById('statusDot')?.classList.add('online');
-    document.getElementById('statusText').textContent = `Running on port ${data.port}`;
-  } catch (e) {
-    document.getElementById('statusDot')?.classList.remove('online');
-    document.getElementById('statusText').textContent = 'Offline';
+    const res = await fetch(`${API}/api/status`);
+    if (res.ok) {
+      el.className = 'connection-status connected';
+      el.querySelector('.status-text').textContent = 'Connected';
+    } else {
+      el.className = 'connection-status error';
+      el.querySelector('.status-text').textContent = 'Error';
+    }
+  } catch {
+    el.className = 'connection-status error';
+    el.querySelector('.status-text').textContent = 'Offline';
   }
 }
 
-// ==================== CONFIG PAGE ====================
+// ============================================
+// Config Page
+// ============================================
+
 async function loadConfig() {
   try {
-    const res = await fetch('/api/config');
-    const config = await res.json();
+    const res = await fetch(`${API}/api/config`);
+    const data = await res.json();
+    currentConfig = data;
 
-    if (config.mode) {
-      selectMode(config.mode);
+    if (data.workspacePath) {
+      document.getElementById('workspace-path').value = data.workspacePath;
     }
-    if (config.workspacePath) {
-      document.getElementById('workspace-path').value = config.workspacePath;
+    if (data.mode) {
+      selectMode(data.mode);
     }
-    if (config.hostUrl) {
-      document.getElementById('host-url').value = config.hostUrl;
+    if (data.hostUrl) {
+      document.getElementById('host-url').value = data.hostUrl;
     }
-  } catch (e) {
-    console.log('Failed to load config');
+  } catch {
+    // Use defaults
   }
 }
 
 function selectMode(mode) {
-  currentMode = mode;
-  document.querySelectorAll('.mode-card').forEach(c => c.classList.remove('selected'));
-  document.querySelector(`[data-mode="${mode}"]`)?.classList.add('selected');
+  currentConfig.mode = mode;
+
+  document.querySelectorAll('.mode-card').forEach(card => {
+    card.classList.toggle('selected', card.dataset.mode === mode);
+  });
 
   document.getElementById('host-config').classList.toggle('hidden', mode !== 'host');
   document.getElementById('remote-config').classList.toggle('hidden', mode !== 'remote');
-}
 
-function selectFolder() {
-  const path = prompt('Enter project folder path:');
-  if (path) {
-    document.getElementById('workspace-path').value = path;
-  }
+  document.getElementById('saveBar').classList.remove('hidden');
 }
 
 async function generateInvite() {
-  const workspacePath = document.getElementById('workspace-path').value;
-  if (!workspacePath) {
-    alert('Please enter a project folder path first');
-    return;
-  }
-
   try {
-    const res = await fetch('/api/invite', {
+    const res = await fetch(`${API}/api/invite`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -99,241 +219,276 @@ async function generateInvite() {
         expires_in_days: 7
       })
     });
-
     const data = await res.json();
+
     if (data.success) {
       document.getElementById('invite-link').value = data.invite.link;
-      alert('Invite link generated!');
+      showToast('success', 'Invite Generated', 'Link is ready to share');
+    } else {
+      showToast('error', 'Error', 'Failed to generate invite link');
     }
-  } catch (e) {
-    alert('Error generating invite');
+  } catch {
+    showToast('error', 'Error', 'Failed to generate invite link');
   }
-}
-
-function copyInviteLink() {
-  const input = document.getElementById('invite-link');
-  input.select();
-  navigator.clipboard.writeText(input.value);
-  alert('Copied!');
 }
 
 async function connectToHost() {
   const hostUrl = document.getElementById('host-url').value;
   if (!hostUrl) {
-    alert('Please enter the host invite link');
+    showToast('warning', 'Missing URL', 'Please enter the host invite link');
     return;
   }
 
   try {
-    await fetch('/api/config', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ mode: 'remote', hostUrl })
-    });
-    alert('Connected! Restart OpenCode to apply.');
-  } catch (e) {
-    alert('Error connecting');
+    const token = hostUrl.split('/invite/')[1];
+    if (token) {
+      const res = await fetch(`${API}/api/invite/validate/${token}`);
+      const result = await res.json();
+
+      if (result.valid) {
+        showToast('success', 'Connected', 'Successfully connected to host');
+      } else {
+        showToast('error', 'Invalid Link', result.reason || 'This invite link is not valid');
+      }
+    }
+  } catch {
+    showToast('error', 'Connection Failed', 'Could not connect to host');
   }
 }
 
 async function saveConfig() {
-  const workspacePath = document.getElementById('workspace-path').value;
-  const hostUrl = document.getElementById('host-url').value;
+  const config = {
+    mode: currentConfig.mode,
+    workspacePath: document.getElementById('workspace-path').value
+  };
+
+  if (config.mode === 'remote') {
+    config.hostUrl = document.getElementById('host-url').value;
+  }
+
+  if (!config.workspacePath && config.mode === 'host') {
+    showToast('warning', 'Missing Path', 'Please enter the project folder path');
+    return;
+  }
 
   try {
-    await fetch('/api/config', {
+    const res = await fetch(`${API}/api/config`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        mode: currentMode,
-        workspacePath,
-        hostUrl
-      })
+      body: JSON.stringify(config)
     });
-    alert('Configuration saved!');
-  } catch (e) {
-    alert('Error saving config');
+    const data = await res.json();
+
+    if (data.success) {
+      showToast('success', 'Saved', 'Configuration saved successfully');
+      document.getElementById('saveBar').classList.add('hidden');
+    } else {
+      showToast('error', 'Error', 'Failed to save configuration');
+    }
+  } catch {
+    showToast('error', 'Error', 'Failed to save configuration');
   }
 }
 
-// ==================== DASHBOARD PAGE ====================
+function copyInviteLink() {
+  const input = document.getElementById('invite-link');
+  if (input.value) {
+    navigator.clipboard.writeText(input.value);
+    showToast('success', 'Copied', 'Invite link copied to clipboard');
+  }
+}
+
+// ============================================
+// Dashboard Page
+// ============================================
+
 async function loadDashboard() {
   try {
-    const [statsRes, teamRes] = await Promise.all([
-      fetch('/api/stats'),
-      fetch('/api/team')
-    ]);
+    const res = await fetch(`${API}/api/stats`);
+    const data = await res.json();
 
-    const stats = await statsRes.json();
-    const team = await teamRes.json();
+    // Animate stat values
+    animateValue('stat-total-changes', data.totalChanges || 0);
+    animateValue('stat-online-users', data.onlineUsers || 0);
+    animateValue('stat-active-locks', data.activeLocks || 0);
 
-    document.getElementById('stat-total-changes').textContent = stats.totalChanges || 0;
-    document.getElementById('stat-online-users').textContent = stats.onlineUsers || 0;
-    document.getElementById('stat-active-locks').textContent = stats.activeLocks || 0;
-    document.getElementById('stat-team-members').textContent = team.members?.length || 0;
+    // Load team count
+    const teamRes = await fetch(`${API}/api/team`);
+    const teamData = await teamRes.json();
+    animateValue('stat-team-members', (teamData.members || []).length);
 
-    renderActivity(stats.recentActivity || []);
-    renderOnlineUsers(stats.online || []);
-    renderChangesByUser(stats.changesByUser || {});
-    renderActiveLocks(stats.locks || []);
-  } catch (e) {
-    console.error('Failed to load dashboard', e);
+    // Recent activity
+    const activityContainer = document.getElementById('recent-activity');
+    const recent = data.recentActivity || [];
+
+    if (recent.length === 0) {
+      activityContainer.innerHTML = '<div class="empty-state"><p>No activity yet</p></div>';
+    } else {
+      activityContainer.innerHTML = recent.map((item, i) => `
+        <div class="activity-item" style="animation-delay: ${i * 0.05}s">
+          <div class="activity-icon ${item.action}">${item.action.charAt(0).toUpperCase()}</div>
+          <div class="activity-info">
+            <div class="activity-file">${item.filePath}</div>
+            <div class="activity-meta">${item.userId} - ${formatTime(item.timestamp)}</div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    // Online users
+    const onlineContainer = document.getElementById('online-users');
+    const online = data.online || [];
+
+    if (online.length === 0) {
+      onlineContainer.innerHTML = '<div class="empty-state"><p>No users online</p></div>';
+    } else {
+      onlineContainer.innerHTML = online.map((user, i) => `
+        <div class="user-item" style="animation-delay: ${i * 0.05}s">
+          <div class="user-avatar" style="background: ${getAvatarColor(user.userId)}">${user.userId.charAt(0).toUpperCase()}</div>
+          <div class="user-info">
+            <div class="user-name">${user.userId}</div>
+            <div class="user-status online">Online</div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    // Active locks
+    const locksContainer = document.getElementById('active-locks');
+    const locks = data.locks || [];
+
+    if (locks.length === 0) {
+      locksContainer.innerHTML = '<div class="empty-state"><p>No active locks</p></div>';
+    } else {
+      locksContainer.innerHTML = locks.map((lock, i) => `
+        <div class="lock-item" style="animation-delay: ${i * 0.05}s">
+          <div class="lock-icon">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+          </div>
+          <div class="lock-info">
+            <div class="lock-file">${lock.filePath}</div>
+            <div class="lock-meta">${lock.userId} - expires ${formatTime(lock.expiresAt)}</div>
+          </div>
+        </div>
+      `).join('');
+    }
+  } catch {
+    showToast('error', 'Error', 'Failed to load dashboard data');
   }
 }
 
-function renderActivity(changes) {
-  const container = document.getElementById('recent-activity');
-  if (!changes.length) {
-    container.innerHTML = '<div class="empty-state"><p>No recent activity</p></div>';
-    return;
+function animateValue(elementId, end) {
+  const el = document.getElementById(elementId);
+  const start = parseInt(el.textContent) || 0;
+  const duration = 600;
+  const startTime = performance.now();
+
+  function update(currentTime) {
+    const elapsed = currentTime - startTime;
+    const progress = Math.min(elapsed / duration, 1);
+    const eased = 1 - Math.pow(1 - progress, 3);
+    el.textContent = Math.round(start + (end - start) * eased);
+
+    if (progress < 1) {
+      requestAnimationFrame(update);
+    }
   }
 
-  container.innerHTML = changes.map(c => `
-    <div class="activity-item">
-      <span class="activity-file">${escapeHtml(c.filePath)}</span>
-      <span class="activity-action ${c.action}">${c.action}</span>
-      <span class="activity-user">${escapeHtml(c.userId)}</span>
-      <span class="activity-time">${formatTime(c.timestamp)}</span>
-    </div>
-  `).join('');
+  requestAnimationFrame(update);
 }
 
-function renderOnlineUsers(users) {
-  const container = document.getElementById('online-users');
-  if (!users.length) {
-    container.innerHTML = '<div class="empty-state"><p>No users online</p></div>';
-    return;
-  }
+// ============================================
+// Changes Page
+// ============================================
 
-  container.innerHTML = users.map(u => `
-    <div class="user-item">
-      <div class="user-avatar">${(u.user_id || 'U')[0].toUpperCase()}</div>
-      <span class="user-name">${escapeHtml(u.user_id)}</span>
-      <span class="user-status online">Online</span>
-    </div>
-  `).join('');
-}
-
-function renderChangesByUser(data) {
-  const container = document.getElementById('changes-by-user');
-  const entries = Object.entries(data);
-
-  if (!entries.length) {
-    container.innerHTML = '<div class="empty-state"><p>No data</p></div>';
-    return;
-  }
-
-  const max = Math.max(...entries.map(([, v]) => v));
-
-  container.innerHTML = entries.map(([user, count]) => `
-    <div style="margin-bottom: 0.5rem;">
-      <div style="display: flex; justify-content: space-between; margin-bottom: 0.25rem;">
-        <span>${escapeHtml(user)}</span>
-        <span>${count}</span>
-      </div>
-      <div style="background: var(--bg-primary); border-radius: 4px; height: 8px;">
-        <div style="background: var(--accent); height: 100%; width: ${(count / max) * 100}%; border-radius: 4px;"></div>
-      </div>
-    </div>
-  `).join('');
-}
-
-function renderActiveLocks(locks) {
-  const container = document.getElementById('active-locks');
-  if (!locks.length) {
-    container.innerHTML = '<div class="empty-state"><p>No active locks</p></div>';
-    return;
-  }
-
-  container.innerHTML = locks.map(l => `
-    <div class="activity-item">
-      <span class="activity-file">${escapeHtml(l.filePath)}</span>
-      <span class="activity-user">${escapeHtml(l.userId)}</span>
-      <span class="activity-time">${l.reason || 'No reason'}</span>
-    </div>
-  `).join('');
-}
-
-// ==================== CHANGES PAGE ====================
 async function loadChanges() {
-  const filePath = document.getElementById('filter-file')?.value;
-  const userId = document.getElementById('filter-user')?.value;
+  const filePath = document.getElementById('filter-file').value;
+  const userId = document.getElementById('filter-user').value;
 
   try {
     const params = new URLSearchParams();
     if (filePath) params.set('file_path', filePath);
     if (userId) params.set('user_id', userId);
-    params.set('limit', '100');
+    params.set('limit', '50');
 
-    const res = await fetch(`/api/changes?${params}`);
+    const res = await fetch(`${API}/api/changes?${params}`);
     const data = await res.json();
 
-    renderChanges(data.changes || []);
-  } catch (e) {
-    console.error('Failed to load changes', e);
+    const container = document.getElementById('changes-list');
+    const changes = data.changes || [];
+
+    if (changes.length === 0) {
+      container.innerHTML = `
+        <div class="empty-state">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="opacity: 0.3">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
+          </svg>
+          <p>No changes recorded yet</p>
+        </div>
+      `;
+    } else {
+      container.innerHTML = changes.map((item, i) => `
+        <div class="change-item" style="animation-delay: ${i * 0.03}s">
+          <span class="change-action ${item.action}">${item.action}</span>
+          <span class="change-file">${item.filePath}</span>
+          <span class="change-user">${item.userId}</span>
+          <span class="change-time">${formatTime(item.timestamp)}</span>
+        </div>
+      `).join('');
+    }
+  } catch {
+    showToast('error', 'Error', 'Failed to load changes');
   }
 }
 
-function renderChanges(changes) {
-  const container = document.getElementById('changes-list');
-  if (!changes.length) {
-    container.innerHTML = '<div class="empty-state"><p>No changes recorded yet</p></div>';
-    return;
-  }
+// ============================================
+// Team Page
+// ============================================
 
-  container.innerHTML = changes.map(c => `
-    <div class="change-item">
-      <span class="change-badge ${c.action}">${c.action}</span>
-      <span class="change-path">${escapeHtml(c.filePath)}</span>
-      <span class="change-user">${escapeHtml(c.userId)}</span>
-      <span class="change-time">${formatTime(c.timestamp)}</span>
-    </div>
-  `).join('');
-}
-
-// ==================== TEAM PAGE ====================
 async function loadTeam() {
   try {
-    const res = await fetch('/api/team');
+    const res = await fetch(`${API}/api/team`);
     const data = await res.json();
 
-    renderTeamMembers(data.members || []);
-    renderTeamOnline(data.online || []);
-  } catch (e) {
-    console.error('Failed to load team', e);
+    // Members
+    const membersContainer = document.getElementById('team-members');
+    const members = data.members || [];
+
+    if (members.length === 0) {
+      membersContainer.innerHTML = '<div class="empty-state"><p>No team members yet</p></div>';
+    } else {
+      membersContainer.innerHTML = members.map((member, i) => `
+        <div class="member-item" style="animation-delay: ${i * 0.05}s">
+          <div class="user-avatar" style="background: ${getAvatarColor(member.userId || 'U')}">${(member.userId || 'U').charAt(0).toUpperCase()}</div>
+          <div class="user-info">
+            <div class="user-name">${member.email || member.userId || 'Unknown'}</div>
+            <div class="user-status">${member.role || 'member'}</div>
+          </div>
+          <span class="member-role">${(member.permissions || 'read').split(',').join(' + ')}</span>
+        </div>
+      `).join('');
+    }
+
+    // Online
+    const onlineContainer = document.getElementById('team-online');
+    const online = data.online || [];
+
+    if (online.length === 0) {
+      onlineContainer.innerHTML = '<div class="empty-state"><p>No users online</p></div>';
+    } else {
+      onlineContainer.innerHTML = online.map((user, i) => `
+        <div class="user-item" style="animation-delay: ${i * 0.05}s">
+          <div class="user-avatar" style="background: ${getAvatarColor(user.userId)}">${user.userId.charAt(0).toUpperCase()}</div>
+          <div class="user-info">
+            <div class="user-name">${user.userId}</div>
+            <div class="user-status online">Online</div>
+          </div>
+        </div>
+      `).join('');
+    }
+  } catch {
+    showToast('error', 'Error', 'Failed to load team data');
   }
-}
-
-function renderTeamMembers(members) {
-  const container = document.getElementById('team-members');
-  if (!members.length) {
-    container.innerHTML = '<div class="empty-state"><p>No team members yet</p></div>';
-    return;
-  }
-
-  container.innerHTML = members.map(m => `
-    <div class="user-item">
-      <div class="user-avatar">${(m.user_id || 'U')[0].toUpperCase()}</div>
-      <span class="user-name">${escapeHtml(m.user_id)}</span>
-      <span class="user-status">${m.permissions || 'read,write'}</span>
-    </div>
-  `).join('');
-}
-
-function renderTeamOnline(users) {
-  const container = document.getElementById('team-online');
-  if (!users.length) {
-    container.innerHTML = '<div class="empty-state"><p>No users online</p></div>';
-    return;
-  }
-
-  container.innerHTML = users.map(u => `
-    <div class="user-item">
-      <div class="user-avatar">${(u.user_id || 'U')[0].toUpperCase()}</div>
-      <span class="user-name">${escapeHtml(u.user_id)}</span>
-      <span class="user-status online">Online</span>
-    </div>
-  `).join('');
 }
 
 async function createInvite() {
@@ -342,12 +497,12 @@ async function createInvite() {
   const days = parseInt(document.getElementById('invite-days').value) || 7;
 
   if (!email) {
-    alert('Please enter an email');
+    showToast('warning', 'Missing Email', 'Please enter an email address');
     return;
   }
 
   try {
-    const res = await fetch('/api/invite', {
+    const res = await fetch(`${API}/api/invite`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -356,91 +511,100 @@ async function createInvite() {
         expires_in_days: days
       })
     });
-
     const data = await res.json();
+
     if (data.success) {
       document.getElementById('generated-invite').value = data.invite.link;
       document.getElementById('invite-result').classList.remove('hidden');
+      showToast('success', 'Invite Created', 'Share the link with your team member');
+    } else {
+      showToast('error', 'Error', 'Failed to create invite');
     }
-  } catch (e) {
-    alert('Error creating invite');
+  } catch {
+    showToast('error', 'Error', 'Failed to create invite');
   }
 }
 
 function copyGeneratedInvite() {
   const input = document.getElementById('generated-invite');
-  input.select();
-  navigator.clipboard.writeText(input.value);
-  alert('Copied!');
+  if (input.value) {
+    navigator.clipboard.writeText(input.value);
+    showToast('success', 'Copied', 'Invite link copied to clipboard');
+  }
 }
 
-// ==================== LOCKS PAGE ====================
+// ============================================
+// Locks Page
+// ============================================
+
 async function loadLocks() {
   try {
-    const res = await fetch('/api/locks');
+    const res = await fetch(`${API}/api/locks`);
     const data = await res.json();
 
-    renderLocks(data.locks || []);
-  } catch (e) {
-    console.error('Failed to load locks', e);
-  }
-}
+    const container = document.getElementById('locks-list');
+    const locks = data.locks || [];
 
-function renderLocks(locks) {
-  const container = document.getElementById('locks-list');
-  if (!locks.length) {
-    container.innerHTML = '<div class="empty-state"><p>No active locks</p></div>';
-    return;
-  }
-
-  container.innerHTML = `
-    <table>
-      <thead>
-        <tr>
-          <th>File</th>
-          <th>Locked By</th>
-          <th>Reason</th>
-          <th>Acquired</th>
-          <th>Expires</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${locks.map(l => `
-          <tr>
-            <td>${escapeHtml(l.filePath)}</td>
-            <td>${escapeHtml(l.userId)}</td>
-            <td>${escapeHtml(l.reason || '-')}</td>
-            <td>${formatTime(l.acquiredAt)}</td>
-            <td>${formatTime(l.expiresAt)}</td>
-          </tr>
+    if (locks.length === 0) {
+      container.innerHTML = `
+        <div class="empty-state">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="opacity: 0.3">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+          </svg>
+          <p>No active locks</p>
+        </div>
+      `;
+    } else {
+      container.innerHTML = `
+        <div class="locks-table-header">
+          <span>File</span>
+          <span>Locked By</span>
+          <span>Reason</span>
+          <span>Expires</span>
+        </div>
+        ${locks.map((lock, i) => `
+          <div class="locks-table-row" style="animation-delay: ${i * 0.05}s">
+            <span class="lock-file">${lock.filePath}</span>
+            <span>${lock.userId}</span>
+            <span>${lock.reason || '-'}</span>
+            <span>${formatTime(lock.expiresAt)}</span>
+          </div>
         `).join('')}
-      </tbody>
-    </table>
-  `;
+      `;
+    }
+  } catch {
+    showToast('error', 'Error', 'Failed to load locks');
+  }
 }
 
-// ==================== UTILITIES ====================
-function escapeHtml(str) {
-  if (!str) return '';
-  const div = document.createElement('div');
-  div.textContent = str;
-  return div.innerHTML;
-}
+// ============================================
+// Helpers
+// ============================================
 
-function formatTime(ts) {
-  if (!ts) return '-';
-  const d = new Date(ts);
+function formatTime(timestamp) {
+  if (!timestamp) return '-';
+  const date = new Date(timestamp);
   const now = new Date();
-  const diff = now - d;
+  const diff = now - date;
 
   if (diff < 60000) return 'Just now';
   if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
   if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
-
-  return d.toLocaleDateString();
+  return date.toLocaleDateString();
 }
 
-// ==================== INIT ====================
-checkStatus();
-loadConfig();
-setInterval(checkStatus, 30000);
+function getAvatarColor(str) {
+  const colors = [
+    'linear-gradient(135deg, #8b5cf6, #06b6d4)',
+    'linear-gradient(135deg, #10b981, #06b6d4)',
+    'linear-gradient(135deg, #f59e0b, #ef4444)',
+    'linear-gradient(135deg, #ec4899, #8b5cf6)',
+    'linear-gradient(135deg, #06b6d4, #3b82f6)',
+    'linear-gradient(135deg, #8b5cf6, #ec4899)',
+  ];
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = str.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return colors[Math.abs(hash) % colors.length];
+}
