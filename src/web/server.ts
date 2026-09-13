@@ -102,6 +102,7 @@ export async function createWebUI(config: ServerConfig): Promise<express.Express
         permissions: permissions || ["read", "write"],
         expiresInDays: expires_in_days || 7,
         createdBy: ownerId,
+        port: config.port,
       });
       res.json({ success: true, invite: link });
     } catch (error) {

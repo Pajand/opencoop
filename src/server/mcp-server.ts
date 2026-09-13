@@ -374,6 +374,7 @@ export class OpenCOOPServer {
           permissions,
           expiresInDays: expires_in_days || 7,
           createdBy: userId,
+          port: this.config.port,
         });
         return {
           content: [{ type: "text" as const, text: JSON.stringify(link) }],
@@ -507,8 +508,8 @@ export class OpenCOOPServer {
     app.use(webApp);
 
     return new Promise((resolve, reject) => {
-      this.httpServer = app.listen(port, () => {
-        logger.info(`OpenCOOP server listening on port ${port}`);
+      this.httpServer = app.listen(port, '0.0.0.0', () => {
+        logger.info(`OpenCOOP server listening on 0.0.0.0:${port}`);
         resolve();
       });
       this.httpServer.on("error", (err: any) => {

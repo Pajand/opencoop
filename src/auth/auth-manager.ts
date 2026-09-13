@@ -1,6 +1,7 @@
 import jwt from "jsonwebtoken";
 import { v4 as uuidv4 } from "uuid";
 import { nanoid } from "nanoid";
+import os from "os";
 import {
   runQuery,
   getAllRows,
@@ -95,6 +96,7 @@ export class AuthManager {
     permissions: string[];
     expiresInDays: number;
     createdBy: string;
+    port?: number;
   }): Promise<{
     link: string;
     token: string;
@@ -120,7 +122,7 @@ export class AuthManager {
     );
 
     return {
-      link: `http://localhost:31313/invite/${token}`,
+      link: `http://${this.getLocalIP()}:${params.port || 31313}/invite/${token}`,
       token,
       expiresAt,
     };
@@ -266,5 +268,17 @@ export class AuthManager {
       `UPDATE workspaces SET ${setClauses.join(", ")} WHERE id = ?`,
       values
     );
+  }
+
+  private getLocalIP(): string {
+    const interfaces = os.networkInterfaces();
+    for (const name of Object.keys(interfaces)) {
+      for (const iface of interfaces[name] || []) {
+        if (iface.family === "IPv4" && !iface.internal) {
+          return iface.address;
+        }
+      }
+    }
+    return "localhost";
   }
 }
