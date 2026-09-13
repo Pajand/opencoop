@@ -65,7 +65,14 @@ npm install -g @opencoop/opencode-plugin
 
 ```json
 {
-  "plugin": ["@opencoop/opencode-plugin"]
+  "plugin": ["@opencoop/opencode-plugin"],
+  "mcp": {
+    "opencoop": {
+      "type": "remote",
+      "url": "http://localhost:31313/mcp",
+      "enabled": true
+    }
+  }
 }
 ```
 
@@ -83,7 +90,14 @@ npm link
 
 ```json
 {
-  "plugin": ["opencoop"]
+  "plugin": ["opencoop"],
+  "mcp": {
+    "opencoop": {
+      "type": "remote",
+      "url": "http://localhost:31313/mcp",
+      "enabled": true
+    }
+  }
 }
 ```
 
@@ -161,7 +175,14 @@ cat ~/.config/opencode/opencode.json 2>/dev/null || echo "{}"
 
 ```json
 {
-  "plugin": ["@opencoop/opencode-plugin"]
+  "plugin": ["@opencoop/opencode-plugin"],
+  "mcp": {
+    "opencoop": {
+      "type": "remote",
+      "url": "http://localhost:31313/mcp",
+      "enabled": true
+    }
+  }
 }
 ```
 

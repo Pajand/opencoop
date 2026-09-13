@@ -65,7 +65,14 @@ Then add to your `~/.config/opencode/opencode.json`:
 
 ```json
 {
-  "plugin": ["@opencoop/opencode-plugin"]
+  "plugin": ["@opencoop/opencode-plugin"],
+  "mcp": {
+    "opencoop": {
+      "type": "remote",
+      "url": "http://localhost:31313/mcp",
+      "enabled": true
+    }
+  }
 }
 ```
 
@@ -83,7 +90,14 @@ Then add to your `~/.config/opencode/opencode.json`:
 
 ```json
 {
-  "plugin": ["opencoop"]
+  "plugin": ["opencoop"],
+  "mcp": {
+    "opencoop": {
+      "type": "remote",
+      "url": "http://localhost:31313/mcp",
+      "enabled": true
+    }
+  }
 }
 ```
 
@@ -161,7 +175,14 @@ Add the plugin to `opencode.json`:
 
 ```json
 {
-  "plugin": ["@opencoop/opencode-plugin"]
+  "plugin": ["@opencoop/opencode-plugin"],
+  "mcp": {
+    "opencoop": {
+      "type": "remote",
+      "url": "http://localhost:31313/mcp",
+      "enabled": true
+    }
+  }
 }
 ```
 
