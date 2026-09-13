@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OpenCOOP - Team Collaboration</title>
+  <link rel="stylesheet" href="/assets/style.css">
+</head>
+<body>
+  <div class="app">
+    <nav class="sidebar">
+      <div class="logo">
+        <h1>OpenCOOP</h1>
+        <span>v1.0.0</span>
+      </div>
+      <ul class="nav-links">
+        <li><a href="#" class="active" data-page="config">Config</a></li>
+        <li><a href="#" data-page="dashboard">Dashboard</a></li>
+        <li><a href="#" data-page="changes">Changes</a></li>
+        <li><a href="#" data-page="team">Team</a></li>
+        <li><a href="#" data-page="locks">Locks</a></li>
+      </ul>
+      <div class="nav-status">
+        <div class="status-dot" id="statusDot"></div>
+        <span id="statusText">Checking...</span>
+      </div>
+    </nav>
+
+    <main class="content">
+      <!-- CONFIG PAGE -->
+      <section id="page-config" class="page active">
+        <h2>Configuration</h2>
+
+        <div class="mode-selection">
+          <div class="mode-card" data-mode="host" onclick="selectMode('host')">
+            <div class="mode-icon">HOST</div>
+            <h3>HOST Mode</h3>
+            <p>Share your project folder with team members</p>
+          </div>
+          <div class="mode-card" data-mode="remote" onclick="selectMode('remote')">
+            <div class="mode-icon">REMOTE</div>
+            <h3>REMOTE Mode</h3>
+            <p>Connect to a host's shared project</p>
+          </div>
+        </div>
+
+        <div id="host-config" class="config-section hidden">
+          <h3>HOST Settings</h3>
+          <div class="form-group">
+            <label>Project Folder Path:</label>
+            <div class="input-row">
+              <input type="text" id="workspace-path" placeholder="/path/to/your/project">
+              <button onclick="selectFolder()" class="btn-secondary">Browse</button>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Invite Link:</label>
+            <div class="input-row">
+              <input type="text" id="invite-link" readonly placeholder="Click Generate to create link">
+              <button onclick="copyInviteLink()" class="btn-secondary">Copy</button>
+            </div>
+          </div>
+          <button onclick="generateInvite()" class="btn-primary">Generate Invite Link</button>
+        </div>
+
+        <div id="remote-config" class="config-section hidden">
+          <h3>REMOTE Settings</h3>
+          <div class="form-group">
+            <label>Host Invite Link:</label>
+            <input type="text" id="host-url" placeholder="http://host:31313/invite/TOKEN">
+          </div>
+          <button onclick="connectToHost()" class="btn-primary">Connect to Host</button>
+        </div>
+
+        <button onclick="saveConfig()" class="btn-primary">Save Configuration</button>
+      </section>
+
+      <!-- DASHBOARD PAGE -->
+      <section id="page-dashboard" class="page">
+        <h2>Dashboard</h2>
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-value" id="stat-total-changes">0</div>
+            <div class="stat-label">Total Changes</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" id="stat-online-users">0</div>
+            <div class="stat-label">Online Users</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" id="stat-active-locks">0</div>
+            <div class="stat-label">Active Locks</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" id="stat-team-members">0</div>
+            <div class="stat-label">Team Members</div>
+          </div>
+        </div>
+
+        <div class="dashboard-grid">
+          <div class="card">
+            <h3>Recent Activity</h3>
+            <div id="recent-activity" class="activity-list"></div>
+          </div>
+          <div class="card">
+            <h3>Online Users</h3>
+            <div id="online-users" class="user-list"></div>
+          </div>
+          <div class="card">
+            <h3>Changes by User</h3>
+            <div id="changes-by-user" class="chart-container"></div>
+          </div>
+          <div class="card">
+            <h3>Active Locks</h3>
+            <div id="active-locks" class="lock-list"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- CHANGES PAGE -->
+      <section id="page-changes" class="page">
+        <h2>Change History</h2>
+        <div class="filters">
+          <input type="text" id="filter-file" placeholder="Filter by file...">
+          <input type="text" id="filter-user" placeholder="Filter by user...">
+          <select id="filter-action">
+            <option value="">All Actions</option>
+            <option value="read">Read</option>
+            <option value="create">Create</option>
+            <option value="update">Update</option>
+            <option value="delete">Delete</option>
+            <option value="move">Move</option>
+          </select>
+          <button onclick="loadChanges()" class="btn-secondary">Apply</button>
+        </div>
+        <div id="changes-list" class="changes-list"></div>
+      </section>
+
+      <!-- TEAM PAGE -->
+      <section id="page-team" class="page">
+        <h2>Team Management</h2>
+        <div class="card">
+          <h3>Invite New Member</h3>
+          <div class="form-row">
+            <input type="email" id="invite-email" placeholder="Email address">
+            <select id="invite-permissions">
+              <option value="read,write">Read + Write</option>
+              <option value="read">Read Only</option>
+              <option value="read,write,admin">Admin</option>
+            </select>
+            <input type="number" id="invite-days" placeholder="Days" value="7" min="1" max="365">
+            <button onclick="createInvite()" class="btn-primary">Generate Invite</button>
+          </div>
+          <div id="invite-result" class="invite-result hidden">
+            <label>Invite Link:</label>
+            <div class="input-row">
+              <input type="text" id="generated-invite" readonly>
+              <button onclick="copyGeneratedInvite()" class="btn-secondary">Copy</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>Team Members</h3>
+          <div id="team-members" class="member-list"></div>
+        </div>
+
+        <div class="card">
+          <h3>Online Users</h3>
+          <div id="team-online" class="user-list"></div>
+        </div>
+      </section>
+
+      <!-- LOCKS PAGE -->
+      <section id="page-locks" class="page">
+        <h2>File Locks</h2>
+        <div class="card">
+          <div class="card-header">
+            <h3>Active Locks</h3>
+            <button onclick="loadLocks()" class="btn-secondary">Refresh</button>
+          </div>
+          <div id="locks-list" class="locks-table"></div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="/assets/app.js"></script>
+</body>
+</html>

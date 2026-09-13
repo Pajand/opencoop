@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OpenCOOP - Accept Invite</title>
+  <link rel="stylesheet" href="/assets/style.css">
+</head>
+<body>
+  <div class="invite-page">
+    <div class="invite-card">
+      <h1>OpenCOOP</h1>
+      <h2>Accept Team Invite</h2>
+
+      <div id="invite-status" class="invite-status">
+        <div class="spinner"></div>
+        <p>Validating invite link...</p>
+      </div>
+
+      <div id="invite-form" class="invite-form hidden">
+        <div class="invite-info">
+          <p><strong>Workspace:</strong> <span id="invite-workspace">-</span></p>
+          <p><strong>Permissions:</strong> <span id="invite-permissions">-</span></p>
+          <p><strong>Expires:</strong> <span id="invite-expires">-</span></p>
+        </div>
+
+        <div class="form-group">
+          <label>Your Name:</label>
+          <input type="text" id="user-name" placeholder="Enter your name">
+        </div>
+
+        <div class="form-group">
+          <label>Your Email:</label>
+          <input type="email" id="user-email" placeholder="Enter your email">
+        </div>
+
+        <button onclick="acceptInvite()" class="btn-primary">Join Team</button>
+      </div>
+
+      <div id="invite-success" class="invite-success hidden">
+        <div class="success-icon">SUCCESS</div>
+        <h3>Welcome to the Team!</h3>
+        <p>You have been added to the workspace.</p>
+        <p>Copy this MCP config and add it to your <code>opencode.json</code>:</p>
+        <div class="config-code">
+          <pre id="mcp-config"></pre>
+          <button onclick="copyMcpConfig()" class="btn-secondary">Copy Config</button>
+        </div>
+        <a href="/" class="btn-primary">Go to Dashboard</a>
+      </div>
+
+      <div id="invite-error" class="invite-error hidden">
+        <div class="error-icon">ERROR</div>
+        <h3>Invalid Invite</h3>
+        <p id="error-message">This invite link is invalid or has expired.</p>
+        <a href="/" class="btn-primary">Go to Dashboard</a>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const token = window.location.pathname.split('/').pop();
+
+    async function validateInvite() {
+      try {
+        const res = await fetch(`/api/invite/validate/${token}`);
+        const data = await res.json();
+
+        if (data.valid) {
+          document.getElementById('invite-status').classList.add('hidden');
+          document.getElementById('invite-form').classList.remove('hidden');
+          document.getElementById('invite-workspace').textContent = data.workspaceId || 'Shared Project';
+          document.getElementById('invite-permissions').textContent = data.permissions?.join(', ') || 'read, write';
+        } else {
+          showError(data.reason || 'Invalid invite link');
+        }
+      } catch (e) {
+        showError('Failed to validate invite');
+      }
+    }
+
+    function showError(msg) {
+      document.getElementById('invite-status').classList.add('hidden');
+      document.getElementById('invite-error').classList.remove('hidden');
+      document.getElementById('error-message').textContent = msg;
+    }
+
+    async function acceptInvite() {
+      const name = document.getElementById('user-name').value;
+      const email = document.getElementById('user-email').value;
+
+      if (!name || !email) {
+        alert('Please fill in all fields');
+        return;
+      }
+
+      try {
+        const res = await fetch('/api/config');
+        const config = await res.json();
+
+        const mcpConfig = {
+          mcp: {
+            opencoop: {
+              type: "remote",
+              url: `http://localhost:31313/mcp`,
+              enabled: true,
+              headers: {
+                "Authorization": `Bearer ${token}`
+              }
+            }
+          }
+        };
+
+        document.getElementById('mcp-config').textContent = JSON.stringify(mcpConfig, null, 2);
+
+        document.getElementById('invite-form').classList.add('hidden');
+        document.getElementById('invite-success').classList.remove('hidden');
+      } catch (e) {
+        alert('Error accepting invite');
+      }
+    }
+
+    function copyMcpConfig() {
+      const config = document.getElementById('mcp-config').textContent;
+      navigator.clipboard.writeText(config);
+      alert('Config copied!');
+    }
+
+    validateInvite();
+  </script>
+</body>
+</html>

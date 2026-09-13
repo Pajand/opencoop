@@ -1,0 +1,26 @@
+# OpenCOOP
+
+OpenCode plugin for team collaboration via shared MCP server.
+
+## Quick Start
+
+```bash
+# Install
+npm install -g @opencoop/opencode-plugin
+
+# Add to opencode.json
+# {
+#   "plugin": ["@opencoop/opencode-plugin"]
+# }
+
+# Restart OpenCode
+# Open http://localhost:31313
+```
+
+## License
+
+MIT
+
+## Author
+
+Hamid Pajand
