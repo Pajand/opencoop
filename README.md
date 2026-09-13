@@ -4,7 +4,7 @@
 
 # OpenCOOP
 
-![OpenCOOP](https://img.shields.io/badge/OpenCOOP-v1.0.0-blue)
+![OpenCOOP](https://img.shields.io/badge/OpenCOOP-v1.1.1-blue)
 ![License](https://img.shields.io/badge/License-Non--Commercial-blue)
 ![OpenCode](https://img.shields.io/badge/OpenCode-Plugin-purple)
 ![MCP](https://img.shields.io/badge/MCP-Streamable%20HTTP-orange)
@@ -61,7 +61,7 @@ Developer A (Remote)           Developer B (Remote)
 npm install -g @opencoop/opencode-plugin
 ```
 
-Then add to your `~/.config/opencode/opencode.json`:
+Then add these lines to your `~/.config/opencode/opencode.json`:
 
 ```json
 {
@@ -75,6 +75,8 @@ Then add to your `~/.config/opencode/opencode.json`:
   }
 }
 ```
+
+> **Note:** If your `opencode.json` already has other settings, just merge the `plugin` and `mcp` lines into your existing file. Don't replace the whole file.
 
 ### Option 2: Install from GitHub
 

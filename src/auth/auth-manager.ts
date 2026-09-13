@@ -272,13 +272,19 @@ export class AuthManager {
 
   private getLocalIP(): string {
     const interfaces = os.networkInterfaces();
+    const candidates: string[] = [];
+
     for (const name of Object.keys(interfaces)) {
       for (const iface of interfaces[name] || []) {
         if (iface.family === "IPv4" && !iface.internal) {
-          return iface.address;
+          if (iface.address.startsWith("192.168.") || iface.address.startsWith("10.") || iface.address.startsWith("172.")) {
+            return iface.address;
+          }
+          candidates.push(iface.address);
         }
       }
     }
-    return "localhost";
+
+    return candidates[0] || "localhost";
   }
 }
