@@ -384,11 +384,29 @@ async function main() {
       res.json({ status: "ok", version: "1.0.0", transport: "stdio" });
     });
 
+    // MCP HTTP endpoints are served by the plugin server (OpenCOOPServer).
+    // In stdio mode there is no HTTP MCP transport, so return JSON (never HTML)
+    // to make that explicit instead of falling through to the SPA fallback.
+    const stdioOnly = (_req: any, res: any) =>
+      res.status(503).json({
+        error: "MCP HTTP transport not available in stdio mode. The plugin server owns this port when running inside OpenCode.",
+      });
+    app.get("/sse", stdioOnly);
+    app.all("/mcp", stdioOnly);
+    app.all("/messages", stdioOnly);
+
+    // Backward compat: invite links were previously at /invite/:token (root).
+    // The Web UI now lives at /ui, so redirect old links.
+    app.get("/invite/:token", (req, res) => res.redirect(`/ui/invite/${req.params.token}`));
+
+    // Web UI - mounted at /ui (same as plugin server) so the SPA fallback
+    // can never shadow MCP/SSE/API routes.
     const webApp = await createWebUI(config);
-    app.use(webApp);
+    app.use("/ui", webApp);
+    app.get("/", (_req, res) => res.redirect("/ui/"));
 
     app.listen(port, '0.0.0.0', () => {
-      console.error(`[OpenCOOP] Web UI available at http://localhost:${port}`);
+      console.error(`[OpenCOOP] Web UI available at http://localhost:${port}/ui/`);
       logger.info(`Web UI listening on 0.0.0.0:${port}`);
     });
   } else {

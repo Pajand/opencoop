@@ -151,7 +151,37 @@ export async function createWebUI(config: ServerConfig): Promise<express.Express
   });
 
   // ==================== SPA FALLBACK ====================
-  app.get("*", (req, res) => {
+  // IMPORTANT: never intercept MCP/SSE/API/health paths.
+  // Only serve index.html for browser navigation (Accept: text/html).
+  // This prevents GET /sse (Accept: text/event-stream) from ever receiving HTML,
+  // regardless of mount point (/ or /ui) or route order in the parent app.
+  app.get("*", (req, res, next) => {
+    const p = req.path || "";
+    if (
+      p === "/sse" ||
+      p.startsWith("/sse/") ||
+      p === "/mcp" ||
+      p.startsWith("/mcp/") ||
+      p === "/messages" ||
+      p.startsWith("/messages") ||
+      p === "/health" ||
+      p.startsWith("/api/")
+    ) {
+      return next();
+    }
+    const accept = req.headers.accept || "";
+    // Browsers navigating to UI pages send Accept: text/html.
+    // MCP/SSE clients send text/event-stream or application/json.
+    // fetch() sends */* — only serve HTML for extensionless UI navigation paths.
+    if (!accept.includes("text/html")) {
+      if (accept !== "" && !accept.includes("*/*")) {
+        return next();
+      }
+      // Even for */*, don't serve HTML for paths that look like API/MCP calls
+      if (p.includes(".") && !p.endsWith(".html")) {
+        return next();
+      }
+    }
     res.sendFile(path.join(__dirname, "public", "index.html"));
   });
 

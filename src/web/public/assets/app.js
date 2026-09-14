@@ -2,7 +2,7 @@
 // OpenCOOP - Main Application
 // ============================================
 
-const API = '';
+const API = '/ui';
 let currentPage = 'config';
 let currentConfig = { mode: null, workspacePath: '' };
 

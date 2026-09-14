@@ -122,7 +122,7 @@ export class AuthManager {
     );
 
     return {
-      link: `http://${this.getLocalIP()}:${params.port || 31313}/invite/${token}`,
+      link: `http://${this.getLocalIP()}:${params.port || 31313}/ui/invite/${token}`,
       token,
       expiresAt,
     };

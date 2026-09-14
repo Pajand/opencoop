@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/assets/style.css">
+  <link rel="stylesheet" href="assets/style.css">
   <style>
     body {
       display: flex;
@@ -263,7 +263,7 @@
       }
 
       try {
-        const res = await fetch(`/api/invite/validate/${token}`);
+        const res = await fetch(`/ui/api/invite/validate/${token}`);
         const data = await res.json();
 
         if (data.valid) {

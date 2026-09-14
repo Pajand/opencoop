@@ -532,8 +532,8 @@ export class OpenCOOPServer {
           this.sseTransports.delete(transport.sessionId);
         };
 
+        // Note: server.connect() already calls transport.start() internally.
         await server.connect(transport);
-        await transport.start();
         console.log(`[OpenCOOP] SSE session established: ${transport.sessionId}`);
       } catch (err) {
         console.log("Error establishing SSE:", err instanceof Error ? err.message : String(err));
@@ -733,8 +733,8 @@ export class OpenCOOPServer {
             this.sseTransports.delete(transport.sessionId);
           };
 
+          // Note: server.connect() already calls transport.start() internally.
           await server.connect(transport);
-          await transport.start();
           console.log(`[OpenCOOP] SSE session established: ${transport.sessionId}`);
         } catch (err) {
           console.log("Error establishing SSE:", err instanceof Error ? err.message : String(err));
@@ -767,31 +767,6 @@ export class OpenCOOPServer {
       res.status(400).json({ error: "Bad Request: No valid session ID" });
     });
 
-    // SSE message endpoint: client POSTs messages here
-    app.post("/messages", async (req, res) => {
-      const sessionId = req.query.sessionId as string | undefined;
-
-      if (!sessionId) {
-        res.status(400).json({ error: "Missing sessionId query parameter" });
-        return;
-      }
-
-      const transport = this.sseTransports.get(sessionId);
-      if (!transport) {
-        res.status(404).json({ error: "Session not found" });
-        return;
-      }
-
-      try {
-        await transport.handlePostMessage(req, res);
-      } catch (err) {
-        console.log("Error handling SSE message:", err instanceof Error ? err.message : String(err));
-        if (!res.headersSent) {
-          res.status(500).json({ error: "Internal server error" });
-        }
-      }
-    });
-
     // Delete session
     app.delete("/mcp", async (req, res) => {
       const sessionId = req.headers["mcp-session-id"] as string | undefined;
@@ -822,9 +797,14 @@ export class OpenCOOPServer {
       }
     });
 
-    // Web UI routes
+    // Backward compat: invite links were previously at /invite/:token (root).
+    // The Web UI now lives at /ui, so redirect old links.
+    app.get("/invite/:token", (req, res) => res.redirect(`/ui/invite/${req.params.token}`));
+
+    // Web UI - mounted at /ui to avoid SPA fallback intercepting MCP endpoints
     const webApp = await createWebUI(this.config);
-    app.use(webApp);
+    app.use("/ui", webApp);
+    app.get("/", (_req, res) => res.redirect("/ui/"));
 
     return new Promise((resolve, reject) => {
       this.httpServer = app.listen(port, '0.0.0.0', () => {
