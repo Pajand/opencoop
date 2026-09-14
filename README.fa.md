@@ -4,10 +4,10 @@
 
 # اوپن‌کوپ
 
-![OpenCOOP](https://img.shields.io/badge/OpenCOOP-v1.5.5-blue)
+![OpenCOOP](https://img.shields.io/badge/OpenCOOP-v1.6.8-blue)
 ![License](https://img.shields.io/badge/License-Non--Commercial-blue)
 ![OpenCode](https://img.shields.io/badge/OpenCode-Plugin-purple)
-![MCP](https://img.shields.io/badge/MCP-Streamable%20HTTP-orange)
+![MCP](https://img.shields.io/badge/MCP-SSE-orange)
 ![Node](https://img.shields.io/badge/Node.js-18+-black)
 
 **پلاگین اوپن‌کد برای همکاری تیمی بلادرنگ از طریق سرور MCP مشترک**
@@ -69,7 +69,7 @@ npm install -g @opencoop/opencode-plugin
   "mcp": {
     "opencoop": {
       "type": "remote",
-      "url": "http://localhost:31313/mcp",
+      "url": "http://localhost:31313/sse",
       "enabled": true
     }
   }
@@ -94,7 +94,7 @@ npm link
   "mcp": {
     "opencoop": {
       "type": "remote",
-      "url": "http://localhost:31313/mcp",
+      "url": "http://localhost:31313/sse",
       "enabled": true
     }
   }
@@ -105,7 +105,7 @@ npm link
 
 1. **پلاگین را نصب کنید** (بالا)
 2. **اوپن‌کد را مجدداً راه‌اندازی کنید**
-3. **مرورگر را باز کنید**: `http://localhost:31313`
+3. **مرورگر را باز کنید**: `http://localhost:31313/ui`
 4. **حالت HOST یا REMOTE را انتخاب کنید**
 5. **پروژه را پیکربندی کنید**
 
@@ -123,7 +123,7 @@ npm link
 1. **پلاگین را روی ماشین خود نصب کنید**
 2. به `opencode.json` اضافه کنید
 3. **اوپن‌کد را مجدداً راه‌اندازی کنید**
-4. `http://localhost:31313` را باز کنید
+4. `http://localhost:31313/ui` را باز کنید
 5. حالت **REMOTE** را انتخاب کنید
 6. **لینک میزبان را Paste کنید**
 7. روی **اتصال** کلیک کنید
@@ -179,7 +179,7 @@ cat ~/.config/opencode/opencode.json 2>/dev/null || echo "{}"
   "mcp": {
     "opencoop": {
       "type": "remote",
-      "url": "http://localhost:31313/mcp",
+      "url": "http://localhost:31313/sse",
       "enabled": true
     }
   }
@@ -196,7 +196,7 @@ npm list -g @opencoop/opencode-plugin
 ### مرحله ۴: دسترسی به رابط وب
 
 ```
-آدرس: http://localhost:31313
+آدرس: http://localhost:31313/ui
 ```
 
 - **حالت HOST**: پوشه را انتخاب کنید، لینک دعوت ایجاد کنید
@@ -209,6 +209,26 @@ npm list -g @opencoop/opencode-plugin
 3. پلاگین **خودکار شروع می‌شود** هنگام شروع اوپن‌کد
 4. تمام پیکربندی از طریق **رابط وب** انجام می‌شود
 5. سرور روی **پورت 31313** اجرا می‌شود
+
+## عیب‌یابی
+
+### ام‌سی‌پی قرمز می‌ماند / وصل نمی‌شود
+1. مطمئن شوید رابط وب (یا ترمینال) اوپن‌کد باز است — سرور پلاگین فقط وقتی بالا می‌آید که اوپن‌کد پلاگین را لود کند.
+2. بررسی سرور: `curl http://localhost:31313/health` باید `{"status":"ok",...}` برگرداند.
+3. بررسی SSE: `curl -N -H 'Accept: text/event-stream' http://localhost:31313/sse` باید `event: endpoint` چاپ کند (نه HTML).
+4. مطمئن شوید آدرس `url` در تنظیمات ام‌سی‌پی با `/sse` تمام می‌شود (نه `/mcp`).
+
+### ابزارها خطا می‌دهند
+رابط وب (`http://localhost:31313/ui`) را باز کنید، حالت HOST یا REMOTE را انتخاب و پوشه پروژه را تنظیم کنید. ابزارها قبل از پیکربندی فضای کاری نمی‌توانند فایل بخوانند/بنویسند.
+
+### پورت 31313 اشغال است
+فقط اولین نمونه اوپن‌کد سرور را بالا می‌آورد؛ بقیه از همان استفاده می‌کنند. اگر برنامه دیگری پورت را گرفته، `port` را در `~/.opencoop/config.json` عوض کنید (و آدرس ام‌سی‌پی را هم مطابق آن).
+
+### رفتار قدیمی بعد از آپدیت (کش قدیمی پلاگین)
+اوپن‌کد پلاگین‌ها را در `~/.cache/opencode/packages/` کش می‌کند. بعد از آپدیت با `npm i -g @opencoop/opencode-plugin@latest`، کش را پاک و اوپن‌کد را ری‌استارت کنید:
+```bash
+rm -rf ~/.cache/opencode/packages/@opencoop
+```
 
 ## مجوز
 

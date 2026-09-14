@@ -4,10 +4,10 @@
 
 # OpenCOOP
 
-![OpenCOOP](https://img.shields.io/badge/OpenCOOP-v1.5.9-blue)
+![OpenCOOP](https://img.shields.io/badge/OpenCOOP-v1.6.8-blue)
 ![License](https://img.shields.io/badge/License-Non--Commercial-blue)
 ![OpenCode](https://img.shields.io/badge/OpenCode-Plugin-purple)
-![MCP](https://img.shields.io/badge/MCP-Streamable%20HTTP-orange)
+![MCP](https://img.shields.io/badge/MCP-SSE-orange)
 ![Node](https://img.shields.io/badge/Node.js-18+-black)
 
 **OpenCode plugin for real-time team collaboration via shared MCP server**
@@ -69,7 +69,7 @@ Then add these lines to your `~/.config/opencode/opencode.json`:
   "mcp": {
     "opencoop": {
       "type": "remote",
-      "url": "http://localhost:31313/mcp",
+      "url": "http://localhost:31313/sse",
       "enabled": true
     }
   }
@@ -96,7 +96,7 @@ Then add to your `~/.config/opencode/opencode.json`:
   "mcp": {
     "opencoop": {
       "type": "remote",
-      "url": "http://localhost:31313/mcp",
+      "url": "http://localhost:31313/sse",
       "enabled": true
     }
   }
@@ -107,7 +107,7 @@ Then add to your `~/.config/opencode/opencode.json`:
 
 1. **Install** the plugin (see above)
 2. **Restart** OpenCode
-3. **Open** `http://localhost:31313` in your browser
+3. **Open** `http://localhost:31313/ui` in your browser
 4. **Select** HOST or REMOTE mode
 5. **Configure** your project
 
@@ -125,7 +125,7 @@ Then add to your `~/.config/opencode/opencode.json`:
 1. **Install** the plugin on your machine
 2. Add to your `opencode.json`
 3. **Restart** OpenCode
-4. Open `http://localhost:31313`
+4. Open `http://localhost:31313/ui`
 5. Select **REMOTE** mode
 6. **Paste** the host's invite link
 7. Click **Connect**
@@ -181,7 +181,7 @@ Add the plugin to `opencode.json`:
   "mcp": {
     "opencoop": {
       "type": "remote",
-      "url": "http://localhost:31313/mcp",
+      "url": "http://localhost:31313/sse",
       "enabled": true
     }
   }
@@ -198,7 +198,7 @@ npm list -g @opencoop/opencode-plugin
 ### Step 4: Access Web UI
 
 ```
-URL: http://localhost:31313
+URL: http://localhost:31313/ui
 ```
 
 - **HOST mode**: Select folder, generate invite link
@@ -234,6 +234,26 @@ URL: http://localhost:31313
 │  │            Shared Project Folder                 │   │
 │  └─────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────┘
+```
+
+## Troubleshooting
+
+### MCP stays red / won't connect
+1. Make sure the OpenCode web UI (or TUI) is open — the plugin server only starts when OpenCode loads the plugin.
+2. Verify the server is up: `curl http://localhost:31313/health` should return `{"status":"ok",...}`.
+3. Verify SSE works: `curl -N -H 'Accept: text/event-stream' http://localhost:31313/sse` should print `event: endpoint` (not HTML).
+4. Make sure your MCP `url` ends with `/sse` (not `/mcp`).
+
+### Tools fail or return errors
+Open the web UI (`http://localhost:31313/ui`), select HOST or REMOTE mode and configure your project folder. Tools need a configured workspace before they can read/write files.
+
+### Port 31313 already in use
+Only the first OpenCode instance starts the server; the others reuse it. If another app uses the port, change `port` in `~/.opencoop/config.json` (and the MCP `url` accordingly).
+
+### Old behavior after update (stale plugin cache)
+OpenCode caches plugins in `~/.cache/opencode/packages/`. After updating with `npm i -g @opencoop/opencode-plugin@latest`, refresh the cache and restart OpenCode:
+```bash
+rm -rf ~/.cache/opencode/packages/@opencoop
 ```
 
 ## License
