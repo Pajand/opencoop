@@ -540,10 +540,9 @@ export class OpenCOOPServer {
           return;
         }
 
-        // OpenCode sends POST with Accept: text/event-stream only (missing application/json)
-        // StreamableHTTPServerTransport rejects this with 406. Handle it ourselves:
-        // Create stateless McpServer, process the request, return SSE response.
-        if (!acceptHeader.includes("application/json") && acceptHeader.includes("text/event-stream")) {
+        // OpenCode sends POST with Accept: text/event-stream or */* (missing application/json)
+        // StreamableHTTPServerTransport rejects this with 406. Handle it ourselves.
+        if (!acceptHeader.includes("application/json")) {
           const server = this.createMcpServer();
           const transport = new StreamableHTTPServerTransport({
             sessionIdGenerator: undefined,
