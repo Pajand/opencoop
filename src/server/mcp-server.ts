@@ -520,6 +520,54 @@ export class OpenCOOPServer {
       res.json({ status: "ok", version: "1.0.0" });
     });
 
+    // SSE endpoint - OpenCode connects here when url ends with /sse
+    // This avoids the StreamableHTTP Accept header issue
+    app.get("/sse", async (req, res) => {
+      try {
+        const server = this.createMcpServer();
+        const transport = new SSEServerTransport("/messages", res);
+        this.sseTransports.set(transport.sessionId, transport);
+
+        transport.onclose = () => {
+          this.sseTransports.delete(transport.sessionId);
+        };
+
+        await server.connect(transport);
+        await transport.start();
+        console.log(`[OpenCOOP] SSE session established: ${transport.sessionId}`);
+      } catch (err) {
+        console.log("Error establishing SSE:", err instanceof Error ? err.message : String(err));
+        if (!res.headersSent) {
+          res.status(500).json({ error: "SSE connection failed" });
+        }
+      }
+    });
+
+    // SSE messages endpoint - POST messages from SSE clients
+    app.post("/messages", async (req, res) => {
+      const sessionId = req.query.sessionId as string | undefined;
+
+      if (!sessionId) {
+        res.status(400).json({ error: "Missing sessionId query parameter" });
+        return;
+      }
+
+      const transport = this.sseTransports.get(sessionId);
+      if (!transport) {
+        res.status(404).json({ error: "Session not found" });
+        return;
+      }
+
+      try {
+        await transport.handlePostMessage(req, res);
+      } catch (err) {
+        console.log("Error handling SSE message:", err instanceof Error ? err.message : String(err));
+        if (!res.headersSent) {
+          res.status(500).json({ error: "Internal server error" });
+        }
+      }
+    });
+
     app.post("/mcp", async (req, res) => {
       try {
         const sessionId = req.headers["mcp-session-id"] as string | undefined;

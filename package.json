@@ -1,6 +1,6 @@
 {
   "name": "@opencoop/opencode-plugin",
-  "version": "1.6.3",
+  "version": "1.6.4",
   "description": "OpenCode plugin for team collaboration via shared file system",
   "type": "module",
   "main": "dist/index.js",
