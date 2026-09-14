@@ -210,7 +210,70 @@ npm list -g @opencoop/opencode-plugin
 4. تمام پیکربندی از طریق **رابط وب** انجام می‌شود
 5. سرور روی **پورت 31313** اجرا می‌شود
 
+### نکات پلتفرمی برای عوامل هوش مصنوعی
+
+**هنگام کمک به کاربر، ابتدا این عیب‌یابی‌ها را اجرا کنید:**
+
+```bash
+# ۱. آیا اوپن‌کد نصب و در دسترس است؟
+which opencode || echo "NOT IN PATH"
+opencode --version 2>&1 | head -1
+
+# ۲. آیا پلاگین نصب است؟
+npm ls -g @opencoop/opencode-plugin 2>&1
+
+# ۳. آیا سرور HTTP بالاست؟
+curl -s --max-time 3 http://localhost:31313/health || echo "SERVER DOWN"
+
+# ۴. آیا SSE کار می‌کند (نه HTML)؟
+curl -s -o /dev/null -w '%{http_code} %{content_type}\n' --max-time 3 -H 'Accept: text/event-stream' http://localhost:31313/sse
+```
+
+**اگه `which opencode` چیزی برنگردوند:**
+- کاربر فقط پلاگین npm رو نصب کرده، نه خود اوپن‌کد رو. پکیج npm پلاگین، خود اوپن‌کد نیست.
+- به کاربر بگو اوپن‌کد رو نصب کنه: `curl -fsSL https://opencode.ai/install | bash`
+
+**اگه اوپن‌کد نصبه ولی `curl localhost:31313/health` جواب نمیده:**
+- ممکنه نسخه پلاگین قدیمی باشه (بدون فیکس سرور HTTP).
+- نسخه رو چک کن: `npm ls -g @opencoop/opencode-plugin` — باید `1.6.8` یا بالاتر باشه.
+- کش پلاگین رو پاک کن: `rm -rf ~/.cache/opencode/packages/@opencoop`
+- اوپن‌کد رو ری‌استارت کن.
+
+**اگه `curl /sse` به جای event-stream، HTML برمی‌گردوند:**
+- نسخه پلاگین در حال اجرا قدیمی‌تر از 1.6.6 است.
+- آپدیت: `npm install -g @opencoop/opencode-plugin@latest`
+- کش رو پاک کن: `rm -rf ~/.cache/opencode/packages/@opencoop`
+- اوپن‌کد رو ری‌استارت کن.
+
+**ترمکس (اندروید):**
+- باینری اوپن‌کد معمولاً توی `$PREFIX/bin/opencode` یا `$HOME/.opencode/bin/opencode` هست.
+- اگه `which opencode` خالی برگردوند، مسیر نصب رو به PATH اضافه کن: `export PATH="$HOME/.opencode/bin:$PATH"` و این خط رو به `~/.bashrc` اضافه کن.
+- پورت 31313 ممکنه توسط اندروید بلاک بشه — اول `curl http://localhost:31313/health` رو داخل خود تermuks بزن (نه از مرورگر دستگاه دیگه) تا مطمئن بشی سرور لوکال بالاست.
+
+**ویندوز:**
+- مسیر کانفیگ: `%USERPROFILE%\.config\opencode\opencode.json` (نه `~/.config`).
+- کش پلاگین: `%USERPROFILE%\.cache\opencode\packages\@opencoop`.
+- مسیر نصب اوپن‌کد متفاوته — با `where opencode` چک کن.
+
+**مک:**
+- اگه با Homebrew نصب شده، اوپن‌کد توی `/opt/homebrew/bin/opencode` هست.
+- اگه با اسکریپت curl نصب شده، توی `~/.opencode/bin/opencode` هست — مطمئن شو توی PATH هست.
+
 ## عیب‌یابی
+
+### پلاگین شناخته شده ولی UI بالا نمیاد / MCP شروع نمیشه
+
+یعنی اوپن‌کد ماژول پلاگین رو لود کرده ولی سرور HTTP بالا نیومده. دلایل رایج:
+
+1. **نسخه پلاگین خیلی قدیمیه**: باید `1.6.8` یا بالاتر باشه. با `npm ls -g @opencoop/opencode-plugin` چک کن.
+2. **کش قدیمی پلاگین**: اوپن‌کد پلاگین‌ها رو توی `~/.cache/opencode/packages/@opencoop` کش می‌کنه. بعد از آپدیت پاکش کن:
+   ```bash
+   rm -rf ~/.cache/opencode/packages/@opencoop
+   ```
+   ویندوز: `%USERPROFILE%\.cache\opencode\packages\@opencoop` رو پاک کن.
+3. **پورت 31313 اشغاله**: برنامه دیگه‌ای پورت رو گرفته. با `lsof -i :31313` چک کن.
+4. **اوپن‌کد توی PATH نیست**: باینری هست ولی قابل دسترسی نیست. با `which opencode` چک کن.
+5. **ترمکس/اندروید**: پورت ممکنه بلاک باشه. اول لوکال تست کن: `curl http://localhost:31313/health`
 
 ### ام‌سی‌پی قرمز می‌ماند / وصل نمی‌شود
 1. مطمئن شوید رابط وب (یا ترمینال) اوپن‌کد باز است — سرور پلاگین فقط وقتی بالا می‌آید که اوپن‌کد پلاگین را لود کند.

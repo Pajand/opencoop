@@ -212,6 +212,59 @@ URL: http://localhost:31313/ui
 4. All configuration is done through the **web UI**
 5. The server runs on **port 31313** by default
 
+### Platform-Specific Notes for AI Agents
+
+**When helping a user, ALWAYS run these diagnostics first:**
+
+```bash
+# 1. Is OpenCode installed and reachable?
+which opencode || echo "NOT IN PATH"
+opencode --version 2>&1 | head -1
+
+# 2. Is the plugin installed?
+npm ls -g @opencoop/opencode-plugin 2>&1
+
+# 3. Is the plugin recognized by OpenCode?
+# (Run this AFTER OpenCode starts — the plugin only loads when OpenCode runs)
+
+# 4. Is the HTTP server up?
+curl -s --max-time 3 http://localhost:31313/health || echo "SERVER DOWN"
+
+# 5. Does SSE work (not HTML)?
+curl -s -o /dev/null -w '%{http_code} %{content_type}\n' --max-time 3 -H 'Accept: text/event-stream' http://localhost:31313/sse
+```
+
+**If `which opencode` returns nothing:**
+- The user installed the npm plugin but NOT OpenCode itself.
+- OpenCode is a separate program. The plugin npm package is NOT OpenCode.
+- Help the user install OpenCode: https://opencode.ai or `curl -fsSL https://opencode.ai/install | bash`
+
+**If OpenCode is installed but `curl localhost:31313/health` fails:**
+- The plugin might be an old version without the HTTP server fix.
+- Check plugin version: `npm ls -g @opencoop/opencode-plugin` — must be `1.6.8` or newer.
+- Clear plugin cache: `rm -rf ~/.cache/opencode/packages/@opencoop` (Linux/Mac) or delete `%USERPROFILE%\.cache\opencode\packages\@opencoop` (Windows).
+- Restart OpenCode.
+
+**If `curl /sse` returns HTML instead of event-stream:**
+- The running plugin version is older than 1.6.6.
+- Update: `npm install -g @opencoop/opencode-plugin@latest`
+- Clear cache: `rm -rf ~/.cache/opencode/packages/@opencoop`
+- Restart OpenCode.
+
+**Termux (Android):**
+- OpenCode binary is usually at `$PREFIX/bin/opencode` or `$HOME/.opencode/bin/opencode`.
+- If `which opencode` fails, add the install path to PATH: `export PATH="$HOME/.opencode/bin:$PATH"` and add this line to `~/.bashrc`.
+- Port 31313 might be blocked by Android — try `curl http://localhost:31313/health` from Termux itself (not from a browser on another device) to verify the server is running locally.
+
+**Windows:**
+- Config path: `%USERPROFILE%\.config\opencode\opencode.json` (not `~/.config`).
+- Plugin cache: `%USERPROFILE%\.cache\opencode\packages\@opencoop`.
+- OpenCode install path varies — check with `where opencode`.
+
+**Mac:**
+- If installed via Homebrew, OpenCode is in `/opt/homebrew/bin/opencode`.
+- If installed via curl script, it's in `~/.opencode/bin/opencode` — ensure this is in your PATH.
+
 ## Architecture
 
 ```
@@ -237,6 +290,20 @@ URL: http://localhost:31313/ui
 ```
 
 ## Troubleshooting
+
+### Plugin recognized by OpenCode but UI not loading / MCP not starting
+
+This means OpenCode loads the plugin module but the HTTP server fails to start. Common causes:
+
+1. **Plugin version too old**: Must be `1.6.8` or newer. Check with `npm ls -g @opencoop/opencode-plugin`.
+2. **Stale plugin cache**: OpenCode caches plugins in `~/.cache/opencode/packages/@opencoop`. After updating, clear it:
+   ```bash
+   rm -rf ~/.cache/opencode/packages/@opencoop
+   ```
+   On Windows: delete `%USERPROFILE%\.cache\opencode\packages\@opencoop`.
+3. **Port 31313 already in use**: Another process is using the port. Check with `lsof -i :31313` or `ss -ltnp | grep 31313`.
+4. **OpenCode not in PATH**: The binary exists but isn't reachable. Verify with `which opencode`.
+5. **Termux/Android**: Port might be restricted. Test locally first: `curl http://localhost:31313/health`.
 
 ### MCP stays red / won't connect
 1. Make sure the OpenCode web UI (or TUI) is open — the plugin server only starts when OpenCode loads the plugin.
