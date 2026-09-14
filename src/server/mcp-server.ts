@@ -1,5 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import { randomUUID } from "crypto";
 import express from "express";
 import cors from "cors";
@@ -23,6 +24,7 @@ export class OpenCOOPServer {
   private authManager!: AuthManager;
   private sessionManager!: SessionManager;
   private transports: Map<string, StreamableHTTPServerTransport> = new Map();
+  private sseTransports: Map<string, SSEServerTransport> = new Map();
   private httpServer: any = null;
 
   constructor(config: ServerConfig) {
@@ -65,6 +67,90 @@ export class OpenCOOPServer {
     this.registerTeamTools(server);
 
     return server;
+  }
+
+  private getToolDefinitions(): Array<{ name: string; description: string; inputSchema: any }> {
+    return [
+      { name: "read_file", description: "Read the contents of a file in the shared project.", inputSchema: { type: "object", properties: { path: { type: "string" }, start_line: { type: "number" }, end_line: { type: "number" } }, required: ["path"] } },
+      { name: "write_file", description: "Create or overwrite a file in the shared project.", inputSchema: { type: "object", properties: { path: { type: "string" }, content: { type: "string" }, create_dirs: { type: "boolean" } }, required: ["path", "content"] } },
+      { name: "edit_file", description: "Make a targeted edit to a file using search and replace.", inputSchema: { type: "object", properties: { path: { type: "string" }, search: { type: "string" }, replace: { type: "string" }, replace_all: { type: "boolean" } }, required: ["path", "search", "replace"] } },
+      { name: "list_files", description: "List files and directories in the shared project.", inputSchema: { type: "object", properties: { path: { type: "string" }, recursive: { type: "boolean" } } } },
+      { name: "search_files", description: "Search for files matching a glob pattern.", inputSchema: { type: "object", properties: { pattern: { type: "string" }, max_results: { type: "number" } }, required: ["pattern"] } },
+      { name: "grep_content", description: "Search file contents using regex pattern.", inputSchema: { type: "object", properties: { pattern: { type: "string" }, path: { type: "string" }, include: { type: "string" } }, required: ["pattern"] } },
+      { name: "directory_tree", description: "Get a tree view of the project directory structure.", inputSchema: { type: "object", properties: { path: { type: "string" }, max_depth: { type: "number" }, exclude: { type: "array", items: { type: "string" } } } } },
+      { name: "lock_file", description: "Acquire an exclusive lock on a file before editing.", inputSchema: { type: "object", properties: { path: { type: "string" }, reason: { type: "string" } }, required: ["path"] } },
+      { name: "unlock_file", description: "Release a lock on a file after editing.", inputSchema: { type: "object", properties: { path: { type: "string" } }, required: ["path"] } },
+      { name: "list_locks", description: "List all currently active file locks in the project.", inputSchema: { type: "object", properties: {} } },
+      { name: "check_lock", description: "Check if a specific file is currently locked and by whom.", inputSchema: { type: "object", properties: { path: { type: "string" } }, required: ["path"] } },
+      { name: "view_changes", description: "View recent changes made by all team members in the project.", inputSchema: { type: "object", properties: { file_path: { type: "string" }, user_id: { type: "string" }, limit: { type: "number" } } } },
+      { name: "view_stats", description: "View statistics about the project.", inputSchema: { type: "object", properties: {} } },
+      { name: "who_is_online", description: "See which team members are currently connected.", inputSchema: { type: "object", properties: {} } },
+      { name: "invite_member", description: "Generate an invite link for a new team member.", inputSchema: { type: "object", properties: { email: { type: "string" }, permissions: { type: "array", items: { type: "string", enum: ["read", "write", "admin"] } }, expires_in_days: { type: "number" } }, required: ["email", "permissions"] } },
+      { name: "list_members", description: "List all team members and their permissions.", inputSchema: { type: "object", properties: {} } },
+      { name: "revoke_access", description: "Revoke a team member's access.", inputSchema: { type: "object", properties: { user_id: { type: "string" }, reason: { type: "string" } }, required: ["user_id"] } },
+    ];
+  }
+
+  private async callTool(name: string, args: any): Promise<string> {
+    const userId = "user-" + randomUUID().slice(0, 8);
+    try {
+      switch (name) {
+        case "read_file":
+          return await this.fileManager.readFile(args.path, { startLine: args.start_line, endLine: args.end_line });
+        case "write_file":
+          await this.fileManager.writeFile(args.path, args.content, { createDirs: args.create_dirs });
+          await this.changeTracker.logChange({ workspaceId: this.config.workspacePath, filePath: args.path, userId, action: "update", newContentHash: await this.fileManager.hash(args.path) });
+          return `File written successfully: ${args.path}`;
+        case "edit_file": {
+          const oldHash = await this.fileManager.hash(args.path);
+          const result = await this.fileManager.editFile(args.path, args.search, args.replace, { replaceAll: args.replace_all });
+          const newHash = await this.fileManager.hash(args.path);
+          await this.changeTracker.logChange({ workspaceId: this.config.workspacePath, filePath: args.path, userId, action: "update", oldContentHash: oldHash, newContentHash: newHash, metadata: JSON.stringify({ changes: result.changes }) });
+          return `Edit applied: ${result.changes} occurrence(s) replaced in ${args.path}`;
+        }
+        case "list_files":
+          return JSON.stringify(await this.fileManager.listFiles(args.path || ".", { recursive: args.recursive }), null, 2);
+        case "search_files":
+          return JSON.stringify(await this.fileManager.searchFiles(args.pattern, { maxResults: args.max_results }), null, 2);
+        case "grep_content":
+          return JSON.stringify(await this.fileManager.grep(args.pattern, { path: args.path, include: args.include }), null, 2);
+        case "directory_tree":
+          return JSON.stringify(await this.fileManager.getDirectoryTree(args.path || ".", { maxDepth: args.max_depth, excludePatterns: args.exclude }), null, 2);
+        case "lock_file": {
+          const sessionId = randomUUID();
+          const lockResult = await this.lockManager.acquireLock({ workspaceId: this.config.workspacePath, filePath: args.path, userId, sessionId, reason: args.reason });
+          return JSON.stringify(lockResult);
+        }
+        case "unlock_file":
+          await this.lockManager.releaseLock(this.config.workspacePath, args.path, userId);
+          return `Lock released for: ${args.path}`;
+        case "list_locks":
+          return JSON.stringify(await this.lockManager.getActiveLocks(this.config.workspacePath), null, 2);
+        case "check_lock":
+          return JSON.stringify(await this.lockManager.checkLock(this.config.workspacePath, args.path));
+        case "view_changes":
+          return JSON.stringify(await this.changeTracker.getChanges({ workspaceId: this.config.workspacePath, filePath: args.file_path, userId: args.user_id, limit: args.limit || 20 }), null, 2);
+        case "view_stats":
+          return JSON.stringify(await this.changeTracker.getStats(this.config.workspacePath), null, 2);
+        case "who_is_online":
+          return JSON.stringify(await this.sessionManager.getOnlineUsers(this.config.workspacePath), null, 2);
+        case "invite_member": {
+          const link = await this.authManager.generateInviteLink({ workspaceId: this.config.workspacePath, email: args.email, permissions: args.permissions, expiresInDays: args.expires_in_days || 7, createdBy: userId, port: this.config.port });
+          return JSON.stringify(link);
+        }
+        case "list_members":
+          return JSON.stringify(await this.authManager.getTeamMembers(this.config.workspacePath), null, 2);
+        case "revoke_access": {
+          const ownerId = "owner-" + randomUUID().slice(0, 8);
+          await this.authManager.revokeAccess(this.config.workspacePath, args.user_id, ownerId);
+          return `Access revoked for user: ${args.user_id}`;
+        }
+        default:
+          return `Unknown tool: ${name}`;
+      }
+    } catch (error) {
+      return `Error: ${error instanceof Error ? error.message : String(error)}`;
+    }
   }
 
   private registerFileTools(server: McpServer) {
@@ -437,6 +523,7 @@ export class OpenCOOPServer {
     app.post("/mcp", async (req, res) => {
       try {
         const sessionId = req.headers["mcp-session-id"] as string | undefined;
+        const acceptHeader = req.headers.accept || "";
 
         if (sessionId && this.transports.has(sessionId)) {
           const transport = this.transports.get(sessionId)!;
@@ -453,9 +540,107 @@ export class OpenCOOPServer {
           return;
         }
 
-        // Stateless mode: each session-less request gets a fresh transport.
-        // Robust against plugin reloads/dispose cycles where an in-memory
-        // session map would lose entries between requests.
+        // OpenCode sends POST with Accept: text/event-stream only (missing application/json)
+        // StreamableHTTPServerTransport rejects this with 406. Handle it ourselves:
+        // Create stateless McpServer, process the request, return SSE response.
+        if (!acceptHeader.includes("application/json") && acceptHeader.includes("text/event-stream")) {
+          const server = this.createMcpServer();
+          const transport = new StreamableHTTPServerTransport({
+            sessionIdGenerator: undefined,
+            enableJsonResponse: false,
+          });
+          await server.connect(transport);
+
+          // Override the transport's accept check by setting proper headers on the response
+          // Actually, we need to handle this manually since the transport will reject it.
+          // Parse the JSON-RPC request, process it, and return as SSE.
+          const body = req.body;
+          if (body && body.method === "initialize") {
+            // For initialize, return the server info as SSE
+            res.setHeader("Content-Type", "text/event-stream");
+            res.setHeader("Cache-Control", "no-cache");
+            res.setHeader("Connection", "keep-alive");
+            res.status(200);
+
+            const initData = {
+              protocolVersion: "2025-03-26",
+              capabilities: {
+                tools: {},
+              },
+              serverInfo: {
+                name: "opencoop",
+                version: "1.0.0",
+              },
+            };
+
+            const response = {
+              jsonrpc: "2.0",
+              id: body.id,
+              result: initData,
+            };
+
+            res.write(`data: ${JSON.stringify(response)}\n\n`);
+            res.write("event: endpoint\ndata: /messages\n\n");
+            res.end();
+            return;
+          }
+
+          if (body && body.method === "tools/list") {
+            res.setHeader("Content-Type", "text/event-stream");
+            res.setHeader("Cache-Control", "no-cache");
+            res.setHeader("Connection", "keep-alive");
+            res.status(200);
+
+            const tools = this.getToolDefinitions();
+            const response = {
+              jsonrpc: "2.0",
+              id: body.id,
+              result: { tools },
+            };
+
+            res.write(`data: ${JSON.stringify(response)}\n\n`);
+            res.end();
+            return;
+          }
+
+          if (body && body.method === "tools/call") {
+            const toolName = body.params?.name;
+            const toolArgs = body.params?.arguments || {};
+            const result = await this.callTool(toolName, toolArgs);
+
+            res.setHeader("Content-Type", "text/event-stream");
+            res.setHeader("Cache-Control", "no-cache");
+            res.setHeader("Connection", "keep-alive");
+            res.status(200);
+
+            const response = {
+              jsonrpc: "2.0",
+              id: body.id,
+              result: {
+                content: [{ type: "text", text: typeof result === "string" ? result : JSON.stringify(result) }],
+              },
+            };
+
+            res.write(`data: ${JSON.stringify(response)}\n\n`);
+            res.end();
+            return;
+          }
+
+          // For any other method, return method not found
+          res.setHeader("Content-Type", "text/event-stream");
+          res.setHeader("Cache-Control", "no-cache");
+          res.status(200);
+          const errResponse = {
+            jsonrpc: "2.0",
+            id: body?.id,
+            error: { code: -32601, message: "Method not found" },
+          };
+          res.write(`data: ${JSON.stringify(errResponse)}\n\n`);
+          res.end();
+          return;
+        }
+
+        // Standard StreamableHTTP path (Accept includes application/json)
         const server = this.createMcpServer();
         const transport = new StreamableHTTPServerTransport({
           sessionIdGenerator: undefined,
@@ -476,19 +661,44 @@ export class OpenCOOPServer {
       }
     });
 
-    // SSE endpoint for server-initiated messages
+    // SSE endpoint for OpenCode's remote MCP client
+    // OpenCode sends GET /mcp with Accept: text/event-stream (SSE style)
     app.get("/mcp", async (req, res) => {
+      const acceptHeader = req.headers.accept || "";
       const sessionId = req.headers["mcp-session-id"] as string | undefined;
 
+      // If existing session, delegate to StreamableHTTP transport
       if (sessionId && this.transports.has(sessionId)) {
         const transport = this.transports.get(sessionId)!;
         await transport.handleRequest(req, res, req.body);
         return;
       }
 
-      // Stateless mode: no session ID, SSE not meaningful — but some MCP clients
-      // (including OpenCode) send GET to probe the endpoint. Create a fresh
-      // transport so the SDK's own validateSession / handleGetRequest can run.
+      // If client accepts SSE (text/event-stream), use SSE transport
+      // This handles OpenCode's remote MCP client which sends GET with Accept: text/event-stream
+      if (acceptHeader.includes("text/event-stream")) {
+        try {
+          const server = this.createMcpServer();
+          const transport = new SSEServerTransport("/messages", res);
+          this.sseTransports.set(transport.sessionId, transport);
+
+          transport.onclose = () => {
+            this.sseTransports.delete(transport.sessionId);
+          };
+
+          await server.connect(transport);
+          await transport.start();
+          console.log(`[OpenCOOP] SSE session established: ${transport.sessionId}`);
+        } catch (err) {
+          console.log("Error establishing SSE:", err instanceof Error ? err.message : String(err));
+          if (!res.headersSent) {
+            res.status(500).json({ error: "SSE connection failed" });
+          }
+        }
+        return;
+      }
+
+      // Default: try StreamableHTTP (stateless mode)
       if (!sessionId) {
         try {
           const transport = new StreamableHTTPServerTransport({
@@ -501,19 +711,38 @@ export class OpenCOOPServer {
         } catch (err) {
           console.log("Error handling MCP GET (stateless):", err instanceof Error ? err.message : String(err));
           if (!res.headersSent) {
-            res.status(500).json({
-              jsonrpc: "2.0",
-              error: { code: -32603, message: "Internal server error" },
-            });
+            res.status(500).json({ error: "Internal server error" });
           }
         }
         return;
       }
 
-      res.status(400).json({
-        jsonrpc: "2.0",
-        error: { code: -32000, message: "Bad Request: No valid session ID" },
-      });
+      res.status(400).json({ error: "Bad Request: No valid session ID" });
+    });
+
+    // SSE message endpoint: client POSTs messages here
+    app.post("/messages", async (req, res) => {
+      const sessionId = req.query.sessionId as string | undefined;
+
+      if (!sessionId) {
+        res.status(400).json({ error: "Missing sessionId query parameter" });
+        return;
+      }
+
+      const transport = this.sseTransports.get(sessionId);
+      if (!transport) {
+        res.status(404).json({ error: "Session not found" });
+        return;
+      }
+
+      try {
+        await transport.handlePostMessage(req, res);
+      } catch (err) {
+        console.log("Error handling SSE message:", err instanceof Error ? err.message : String(err));
+        if (!res.headersSent) {
+          res.status(500).json({ error: "Internal server error" });
+        }
+      }
     });
 
     // Delete session
