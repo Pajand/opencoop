@@ -1,6 +1,6 @@
 {
   "name": "@opencoop/opencode-plugin",
-  "version": "1.4.0",
+  "version": "1.4.2",
   "description": "OpenCode plugin for team collaboration via shared MCP server",
   "type": "module",
   "main": "dist/index.js",
@@ -8,13 +8,24 @@
   "bin": {
     "opencoop": "dist/cli.js"
   },
-  "files": ["dist", "README.md", "LICENSE"],
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsc --skipLibCheck && cp -r src/web/public dist/web/",
     "start": "node dist/cli.js"
   },
-  "keywords": ["mcp", "opencode", "plugin", "collaboration", "shared", "team"],
+  "keywords": [
+    "mcp",
+    "opencode",
+    "plugin",
+    "collaboration",
+    "shared",
+    "team"
+  ],
   "author": "Hamid Pajand",
   "license": "SEE LICENSE IN LICENSE",
   "dependencies": {
