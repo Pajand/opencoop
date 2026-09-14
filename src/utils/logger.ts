@@ -1,15 +1,13 @@
 import pino from "pino";
 
-const isTTY = process.stdout.isTTY;
+const isTTY = process.stderr.isTTY;
 
 export const logger = pino(
+  { level: process.env.LOG_LEVEL || "info" },
   isTTY
-    ? {
-        transport: {
-          target: "pino-pretty",
-          options: { colorize: true },
-        },
-        level: process.env.LOG_LEVEL || "info",
-      }
-    : { level: process.env.LOG_LEVEL || "info" }
+    ? pino.transport({
+        target: "pino-pretty",
+        options: { colorize: true, destination: 2 },
+      })
+    : pino.destination(2)
 );
