@@ -1,7 +1,14 @@
-import type { PluginModule, PluginInput } from "@opencode-ai/plugin";
+import type { PluginModule, PluginInput, ToolContext } from "@opencode-ai/plugin";
+import { z } from "zod";
+import { randomUUID } from "crypto";
 import { loadConfig } from "./utils/config.js";
-import { logger } from "./utils/logger.js";
 import { OpenCOOPServer } from "./server/mcp-server.js";
+import { FileManager } from "./filesystem/file-manager.js";
+import { LockManager } from "./filesystem/lock-manager.js";
+import { ChangeTracker } from "./filesystem/change-tracker.js";
+import { AuthManager } from "./auth/auth-manager.js";
+import { SessionManager } from "./auth/session-manager.js";
+import { initDatabase, startAutoSave, stopAutoSave } from "./utils/database.js";
 
 async function isServerAlive(port: number): Promise<boolean> {
   try {
@@ -12,65 +19,252 @@ async function isServerAlive(port: number): Promise<boolean> {
   }
 }
 
+function defineTool(desc: string, args: any, exec: any) {
+  return { description: desc, args, execute: exec };
+}
+
 const plugin: PluginModule = {
   id: "opencoop",
   server: async (_input: PluginInput) => {
-    console.log("[OpenCOOP] Plugin server starting...");
-    logger.info("OpenCOOP plugin server starting...");
-
-    let config;
     try {
-      config = await loadConfig();
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      console.error("[OpenCOOP] Failed to load config:", msg);
-      logger.error("Failed to load config: %s", msg);
-      return {};
-    }
+      console.log("[OpenCOOP] Plugin server starting...");
 
-    const port = config.port || 31313;
-    const server = new OpenCOOPServer(config);
+      let config;
+      try {
+        config = await loadConfig();
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.log("[OpenCOOP] Failed to load config:", msg);
+        return {};
+      }
 
-    try {
-      await server.startHttp(port);
-      console.log(`[OpenCOOP] Server ready on port ${port}`);
-      logger.info("OpenCOOP server started on port %d", port);
-    } catch (error) {
-      const msg = error instanceof Error ? error.message : String(error);
-      const isPortBusy =
-        (error as any)?.code === "EADDRINUSE" ||
-        msg.includes("EADDRINUSE") ||
-        msg.includes("already in use") ||
-        msg.includes("address in use") ||
-        msg.includes("in use");
+      const port = config.port || 31313;
+      const workspacePath = config.workspacePath;
 
-      if (isPortBusy) {
-        const alive = await isServerAlive(port);
-        if (alive) {
-          console.log(`[OpenCOOP] Port ${port} already in use and server is alive - reusing`);
-          logger.warn("OpenCOOP port %d in use, server alive - reusing existing instance", port);
-          return {};
-        }
-        console.log(`[OpenCOOP] Port ${port} in use but server not responding - waiting and retrying`);
-        logger.warn("OpenCOOP port %d in use, server not alive", port);
-        await new Promise((r) => setTimeout(r, 2000));
-        const retryAlive = await isServerAlive(port);
-        if (retryAlive) {
-          console.log(`[OpenCOOP] Server came up on port ${port} after wait`);
+      await initDatabase(config.databasePath);
+      startAutoSave();
+
+      const fileManager = new FileManager(workspacePath);
+      const lockManager = new LockManager();
+      const changeTracker = new ChangeTracker();
+      const authManager = new AuthManager(config.jwtSecret);
+      const sessionManager = new SessionManager();
+
+      try {
+        await lockManager.initialize();
+        await changeTracker.initialize();
+        await authManager.initialize();
+        await sessionManager.initialize();
+        console.log("[OpenCOOP] All managers initialized");
+      } catch (error) {
+        console.log("[OpenCOOP] Error initializing managers:", error instanceof Error ? error.message : String(error));
+      }
+
+      const alive = await isServerAlive(port);
+      let serverInstance: OpenCOOPServer | null = null;
+
+      if (alive) {
+        console.log(`[OpenCOOP] Server already running on port ${port} - reusing`);
+      } else {
+        serverInstance = new OpenCOOPServer(config);
+        try {
+          await serverInstance.startHttp(port);
+          console.log(`[OpenCOOP] Server ready on port ${port}`);
+        } catch (error: any) {
+          console.log("[OpenCOOP] Failed to start server:", error instanceof Error ? error.message : String(error));
           return {};
         }
       }
 
-      console.error("[OpenCOOP] Failed to start:", msg);
-      logger.error("Failed to start OpenCOOP: %s", msg);
+      const userId = () => "user-" + randomUUID().slice(0, 8);
+
+      const tools: Record<string, any> = {};
+
+      tools.read_file = defineTool(
+        "Read the contents of a file in the shared project. Use this to view code, configs, or any text file.",
+        { path: z.string(), start_line: z.number().optional(), end_line: z.number().optional() },
+        async (args: any, _ctx: any) => {
+          const uid = userId();
+          const content = await fileManager.readFile(args.path, {
+            startLine: args.start_line,
+            endLine: args.end_line,
+          });
+          await changeTracker.logChange({ workspaceId: workspacePath, filePath: args.path, userId: uid, action: "read" });
+          return content;
+        }
+      );
+
+      tools.write_file = defineTool(
+        "Create or overwrite a file in the shared project. This will be tracked in the audit log.",
+        { path: z.string(), content: z.string(), create_dirs: z.boolean().optional() },
+        async (args: any, _ctx: any) => {
+          const uid = userId();
+          await fileManager.writeFile(args.path, args.content, { createDirs: args.create_dirs });
+          await changeTracker.logChange({ workspaceId: workspacePath, filePath: args.path, userId: uid, action: "update", newContentHash: await fileManager.hash(args.path) });
+          return `File written successfully: ${args.path}`;
+        }
+      );
+
+      tools.edit_file = defineTool(
+        "Make a targeted edit to a file using search and replace. Preferred over write_file for modifying existing files.",
+        { path: z.string(), search: z.string(), replace: z.string(), replace_all: z.boolean().optional() },
+        async (args: any, _ctx: any) => {
+          const uid = userId();
+          const oldHash = await fileManager.hash(args.path);
+          const result = await fileManager.editFile(args.path, args.search, args.replace, { replaceAll: args.replace_all });
+          const newHash = await fileManager.hash(args.path);
+          await changeTracker.logChange({ workspaceId: workspacePath, filePath: args.path, userId: uid, action: "update", oldContentHash: oldHash, newContentHash: newHash, metadata: JSON.stringify({ changes: result.changes }) });
+          return `Edit applied: ${result.changes} occurrence(s) replaced in ${args.path}`;
+        }
+      );
+
+      tools.list_files = defineTool(
+        "List files and directories in the shared project.",
+        { path: z.string().optional(), recursive: z.boolean().optional() },
+        async (args: any, _ctx: any) => {
+          const files = await fileManager.listFiles(args.path || ".", { recursive: args.recursive });
+          return JSON.stringify(files, null, 2);
+        }
+      );
+
+      tools.search_files = defineTool(
+        "Search for files matching a glob pattern.",
+        { pattern: z.string(), max_results: z.number().optional() },
+        async (args: any, _ctx: any) => {
+          const results = await fileManager.searchFiles(args.pattern, { maxResults: args.max_results });
+          return JSON.stringify(results, null, 2);
+        }
+      );
+
+      tools.grep_content = defineTool(
+        "Search file contents using regex pattern.",
+        { pattern: z.string(), path: z.string().optional(), include: z.string().optional() },
+        async (args: any, _ctx: any) => {
+          const results = await fileManager.grep(args.pattern, { path: args.path, include: args.include });
+          return JSON.stringify(results, null, 2);
+        }
+      );
+
+      tools.directory_tree = defineTool(
+        "Get a tree view of the project directory structure.",
+        { path: z.string().optional(), max_depth: z.number().optional(), exclude: z.array(z.string()).optional() },
+        async (args: any, _ctx: any) => {
+          const tree = await fileManager.getDirectoryTree(args.path || ".", { maxDepth: args.max_depth, excludePatterns: args.exclude });
+          return JSON.stringify(tree, null, 2);
+        }
+      );
+
+      tools.lock_file = defineTool(
+        "Acquire an exclusive lock on a file before editing. Prevents other users from editing the same file simultaneously.",
+        { path: z.string(), reason: z.string().optional() },
+        async (args: any, _ctx: any) => {
+          const uid = userId();
+          const sessionId = randomUUID();
+          const result = await lockManager.acquireLock({ workspaceId: workspacePath, filePath: args.path, userId: uid, sessionId, reason: args.reason });
+          return JSON.stringify(result);
+        }
+      );
+
+      tools.unlock_file = defineTool(
+        "Release a lock on a file after editing.",
+        { path: z.string() },
+        async (args: any, _ctx: any) => {
+          const uid = userId();
+          await lockManager.releaseLock(workspacePath, args.path, uid);
+          return `Lock released for: ${args.path}`;
+        }
+      );
+
+      tools.list_locks = defineTool(
+        "List all currently active file locks in the project.",
+        {},
+        async (_args: any, _ctx: any) => {
+          const locks = await lockManager.getActiveLocks(workspacePath);
+          return JSON.stringify(locks, null, 2);
+        }
+      );
+
+      tools.check_lock = defineTool(
+        "Check if a specific file is currently locked and by whom.",
+        { path: z.string() },
+        async (args: any, _ctx: any) => {
+          const lock = await lockManager.checkLock(workspacePath, args.path);
+          return JSON.stringify(lock);
+        }
+      );
+
+      tools.view_changes = defineTool(
+        "View recent changes made by all team members in the project.",
+        { file_path: z.string().optional(), user_id: z.string().optional(), limit: z.number().optional() },
+        async (args: any, _ctx: any) => {
+          const changes = await changeTracker.getChanges({ workspaceId: workspacePath, filePath: args.file_path, userId: args.user_id, limit: args.limit || 20 });
+          return JSON.stringify(changes, null, 2);
+        }
+      );
+
+      tools.view_stats = defineTool(
+        "View statistics about the project: total files, changes per user, recent activity.",
+        {},
+        async (_args: any, _ctx: any) => {
+          const stats = await changeTracker.getStats(workspacePath);
+          return JSON.stringify(stats, null, 2);
+        }
+      );
+
+      tools.who_is_online = defineTool(
+        "See which team members are currently connected to this project.",
+        {},
+        async (_args: any, _ctx: any) => {
+          const online = await sessionManager.getOnlineUsers(workspacePath);
+          return JSON.stringify(online, null, 2);
+        }
+      );
+
+      tools.invite_member = defineTool(
+        "Generate an invite link for a new team member. Only the project owner can use this.",
+        { email: z.string(), permissions: z.array(z.enum(["read", "write", "admin"])), expires_in_days: z.number().optional() },
+        async (args: any, _ctx: any) => {
+          const uid = userId();
+          const link = await authManager.generateInviteLink({ workspaceId: workspacePath, email: args.email, permissions: args.permissions, expiresInDays: args.expires_in_days || 7, createdBy: uid, port });
+          return JSON.stringify(link);
+        }
+      );
+
+      tools.list_members = defineTool(
+        "List all team members and their permissions.",
+        {},
+        async (_args: any, _ctx: any) => {
+          const members = await authManager.getTeamMembers(workspacePath);
+          return JSON.stringify(members, null, 2);
+        }
+      );
+
+      tools.revoke_access = defineTool(
+        "Revoke a team member's access. Only the project owner can use this.",
+        { user_id: z.string(), reason: z.string().optional() },
+        async (args: any, _ctx: any) => {
+          const ownerId = "owner-" + randomUUID().slice(0, 8);
+          await authManager.revokeAccess(workspacePath, args.user_id, ownerId);
+          return `Access revoked for user: ${args.user_id}`;
+        }
+      );
+
+      console.log(`[OpenCOOP] Registered ${Object.keys(tools).length} tools`);
+
+      return {
+        tool: tools,
+        dispose: async () => {
+          try {
+            if (serverInstance) await serverInstance.stop();
+            stopAutoSave();
+          } catch {}
+        },
+      };
+    } catch (fatal) {
+      const msg = fatal instanceof Error ? fatal.message : String(fatal);
+      console.log("[OpenCOOP] Fatal error (suppressed):", msg);
       return {};
     }
-
-    return {
-      dispose: async () => {
-        await server.stop();
-      },
-    };
   },
 };
 

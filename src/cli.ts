@@ -48,7 +48,7 @@ async function main() {
     await sessionManager.initialize();
     logger.info("All managers initialized");
   } catch (error) {
-    logger.error("Error initializing managers: %s", error instanceof Error ? error.message : String(error));
+    console.log("Error initializing managers:", error instanceof Error ? error.message : String(error));
   }
 
   const mcpServer = new McpServer({

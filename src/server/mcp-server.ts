@@ -49,7 +49,7 @@ export class OpenCOOPServer {
       await this.sessionManager.initialize();
       logger.info("All managers initialized");
     } catch (error) {
-      logger.error("Error initializing managers: %s", error instanceof Error ? error.message : String(error));
+      console.log("Error initializing managers:", error instanceof Error ? error.message : String(error));
     }
   }
 
@@ -465,7 +465,7 @@ export class OpenCOOPServer {
         await server.connect(transport);
         await transport.handleRequest(req, res, req.body);
       } catch (error) {
-        logger.error("Error handling MCP request: %s", error instanceof Error ? error.message : String(error));
+        console.log("Error handling MCP request:", error instanceof Error ? error.message : String(error));
         if (!res.headersSent) {
           res.status(500).json({
             jsonrpc: "2.0",
@@ -499,7 +499,7 @@ export class OpenCOOPServer {
           await freshServer.connect(transport);
           await transport.handleRequest(req, res, req.body);
         } catch (err) {
-          logger.error("Error handling MCP GET (stateless): %s", err instanceof Error ? err.message : String(err));
+          console.log("Error handling MCP GET (stateless):", err instanceof Error ? err.message : String(err));
           if (!res.headersSent) {
             res.status(500).json({
               jsonrpc: "2.0",
@@ -536,7 +536,7 @@ export class OpenCOOPServer {
         await freshServer.connect(transport);
         await transport.handleRequest(req, res, req.body);
       } catch (err) {
-        logger.error("Error handling MCP DELETE: %s", err instanceof Error ? err.message : String(err));
+        console.log("Error handling MCP DELETE:", err instanceof Error ? err.message : String(err));
         if (!res.headersSent) {
           res.status(500).json({
             jsonrpc: "2.0",
@@ -557,9 +557,9 @@ export class OpenCOOPServer {
       });
       this.httpServer.on("error", (err: any) => {
         if (err.code === "EADDRINUSE") {
-          logger.error(`Port ${port} is already in use`);
+          console.log(`Port ${port} is already in use`);
         } else {
-          logger.error("HTTP server error: %s", err.message);
+          console.log("HTTP server error:", err.message);
         }
         reject(err);
       });
