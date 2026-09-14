@@ -424,7 +424,11 @@ export class OpenCOOPServer {
 
     const app = express();
     app.use(express.json());
-    app.use(cors({ origin: true }));
+    app.use(cors({
+      origin: true,
+      exposedHeaders: ["mcp-session-id"],
+      allowedHeaders: ["Content-Type", "mcp-session-id", "Accept", "Mcp-Protocol-Version", "Last-Event-ID"],
+    }));
 
     app.get("/health", (req, res) => {
       res.json({ status: "ok", version: "1.0.0" });
@@ -455,6 +459,7 @@ export class OpenCOOPServer {
         const server = this.createMcpServer();
         const transport = new StreamableHTTPServerTransport({
           sessionIdGenerator: undefined,
+          enableJsonResponse: true,
         });
 
         await server.connect(transport);
@@ -474,29 +479,71 @@ export class OpenCOOPServer {
     // SSE endpoint for server-initiated messages
     app.get("/mcp", async (req, res) => {
       const sessionId = req.headers["mcp-session-id"] as string | undefined;
-      if (!sessionId || !this.transports.has(sessionId)) {
-        res.status(400).json({
-          jsonrpc: "2.0",
-          error: { code: -32000, message: "Bad Request: No valid session ID" },
-        });
+
+      if (sessionId && this.transports.has(sessionId)) {
+        const transport = this.transports.get(sessionId)!;
+        await transport.handleRequest(req, res, req.body);
         return;
       }
-      const transport = this.transports.get(sessionId);
-      await transport!.handleRequest(req, res, req.body);
+
+      // Stateless mode: no session ID, SSE not meaningful — but some MCP clients
+      // (including OpenCode) send GET to probe the endpoint. Create a fresh
+      // transport so the SDK's own validateSession / handleGetRequest can run.
+      if (!sessionId) {
+        try {
+          const transport = new StreamableHTTPServerTransport({
+            sessionIdGenerator: undefined,
+            enableJsonResponse: true,
+          });
+          const freshServer = this.createMcpServer();
+          await freshServer.connect(transport);
+          await transport.handleRequest(req, res, req.body);
+        } catch (err) {
+          logger.error("Error handling MCP GET (stateless): %s", err instanceof Error ? err.message : String(err));
+          if (!res.headersSent) {
+            res.status(500).json({
+              jsonrpc: "2.0",
+              error: { code: -32603, message: "Internal server error" },
+            });
+          }
+        }
+        return;
+      }
+
+      res.status(400).json({
+        jsonrpc: "2.0",
+        error: { code: -32000, message: "Bad Request: No valid session ID" },
+      });
     });
 
     // Delete session
     app.delete("/mcp", async (req, res) => {
       const sessionId = req.headers["mcp-session-id"] as string | undefined;
-      if (!sessionId || !this.transports.has(sessionId)) {
-        res.status(400).json({
-          jsonrpc: "2.0",
-          error: { code: -32000, message: "Bad Request: No valid session ID" },
-        });
+
+      if (sessionId && this.transports.has(sessionId)) {
+        const transport = this.transports.get(sessionId)!;
+        await transport.handleRequest(req, res, req.body);
         return;
       }
-      const transport = this.transports.get(sessionId);
-      await transport!.handleRequest(req, res, req.body);
+
+      // Stateless mode or invalid session — delegate to SDK for proper response
+      try {
+        const transport = new StreamableHTTPServerTransport({
+          sessionIdGenerator: undefined,
+          enableJsonResponse: true,
+        });
+        const freshServer = this.createMcpServer();
+        await freshServer.connect(transport);
+        await transport.handleRequest(req, res, req.body);
+      } catch (err) {
+        logger.error("Error handling MCP DELETE: %s", err instanceof Error ? err.message : String(err));
+        if (!res.headersSent) {
+          res.status(500).json({
+            jsonrpc: "2.0",
+            error: { code: -32603, message: "Internal server error" },
+          });
+        }
+      }
     });
 
     // Web UI routes
