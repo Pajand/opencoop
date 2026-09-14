@@ -559,7 +559,10 @@ export class OpenCOOPServer {
       }
 
       try {
-        await transport.handlePostMessage(req, res);
+        // IMPORTANT: express.json() already consumed the request stream,
+        // so pass the parsed body — otherwise the SDK throws
+        // "stream is not readable" and every tools call fails with HTTP 400.
+        await transport.handlePostMessage(req, res, req.body);
       } catch (err) {
         console.log("Error handling SSE message:", err instanceof Error ? err.message : String(err));
         if (!res.headersSent) {
