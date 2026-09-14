@@ -1,6 +1,6 @@
 {
   "name": "@opencoop/opencode-plugin",
-  "version": "1.4.3",
+  "version": "1.4.4",
   "description": "OpenCode plugin for team collaboration via shared MCP server",
   "type": "module",
   "main": "dist/index.js",
