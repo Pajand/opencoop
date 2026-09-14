@@ -19,6 +19,13 @@ const plugin: PluginModule = {
       logger.info("OpenCOOP server started on port %d", port);
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
+      // Another process (e.g. the stdio CLI) already serves the Web UI.
+      // Don't fail plugin loading; MCP still works.
+      if (msg.includes("EADDRINUSE") || msg.includes("already in use")) {
+        console.log(`[OpenCOOP] Port ${port} already in use - Web UI served elsewhere, continuing`);
+        logger.warn("OpenCOOP port %d in use, continuing without local HTTP server", port);
+        return {};
+      }
       console.error("[OpenCOOP] Failed to start:", msg);
       logger.error("Failed to start OpenCOOP: %s", msg);
       throw error;

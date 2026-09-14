@@ -455,9 +455,13 @@ export class OpenCOOPServer {
           // initialize request, so (re)register under the final id now.
           if (transport.sessionId) {
             this.transports.set(transport.sessionId, transport);
+            logger.info(`[OpenCOOP] session stored: ${transport.sessionId} (total=${this.transports.size})`);
+          } else {
+            logger.warn(`[OpenCOOP] no sessionId after initialize!`);
           }
           return;
         } else {
+          logger.info(`[OpenCOOP] session miss: got=${sessionId} stored=${this.transports.size}`);
           res.status(400).json({
             jsonrpc: "2.0",
             error: { code: -32000, message: "Bad Request: No valid session ID" },
