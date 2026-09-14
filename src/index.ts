@@ -62,8 +62,6 @@ async function ensureServer() {
   }
 }
 
-ensureServer().catch(() => {});
-
 const plugin = {
   id: "opencoop",
   setup: async (_context?: any): Promise<void> => {
