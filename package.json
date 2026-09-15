@@ -1,6 +1,6 @@
 {
   "name": "@opencoop/opencode-plugin",
-  "version": "1.7.3",
+  "version": "1.8.0",
   "description": "OpenCode plugin for team collaboration via shared file system",
   "type": "module",
   "main": "dist/index.js",
@@ -44,8 +44,7 @@
     "pino-pretty": "^13.0.0",
     "dotenv": "^16.4.7",
     "chalk": "^5.4.1",
-    "diff": "^7.0.0",
-    "cloudflared": "^0.7.3"
+    "diff": "^7.0.0"
   },
   "devDependencies": {
     "@types/node": "^22.13.0",

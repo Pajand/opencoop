@@ -1,10 +1,60 @@
-import { spawn, ChildProcess } from "child_process";
+import { spawn, execSync, ChildProcess } from "child_process";
 import { EventEmitter } from "events";
+import { existsSync, mkdirSync } from "fs";
+import { join, dirname } from "path";
+
+const CLOUDFLARED_VERSION = "2025.2.1";
 
 export class TunnelManager extends EventEmitter {
   private process: ChildProcess | null = null;
   private publicUrl: string | null = null;
   private starting = false;
+
+  private async ensureBinary(): Promise<string> {
+    // 1. Try require("cloudflared")
+    try {
+      const cloudflared = require("cloudflared");
+      const bin = cloudflared.DEFAULT_CLOUDFLARED_BIN || cloudflared.bin;
+      if (bin && existsSync(bin)) {
+        console.log(`[OpenCOOP] Cloudflare binary (npm): ${bin}`);
+        return bin;
+      }
+    } catch {}
+
+    // 2. Try global PATH
+    try {
+      const which = execSync("which cloudflared 2>/dev/null").toString().trim();
+      if (which && existsSync(which)) {
+        console.log(`[OpenCOOP] Cloudflare binary (global): ${which}`);
+        return which;
+      }
+    } catch {}
+
+    // 3. Try ~/.cache/cloudflared/cloudflared
+    const cacheDir = join(process.env.HOME || "/root", ".cache", "cloudflared");
+    const cachedBin = join(cacheDir, "cloudflared");
+    if (existsSync(cachedBin)) {
+      console.log(`[OpenCOOP] Cloudflare binary (cached): ${cachedBin}`);
+      return cachedBin;
+    }
+
+    // 4. Download automatically
+    console.log("[OpenCOOP] Downloading cloudflared binary...");
+    if (!existsSync(cacheDir)) mkdirSync(cacheDir, { recursive: true });
+
+    const platform = process.platform === "linux" ? "linux" : process.platform;
+    const arch = process.arch === "arm64" ? "arm64" : "amd64";
+    const url = `https://github.com/cloudflare/cloudflared/releases/download/${CLOUDFLARED_VERSION}/cloudflared-${platform}-${arch}`;
+
+    try {
+      execSync(`curl -fsSL -o "${cachedBin}" "${url}"`, { timeout: 60000 });
+      execSync(`chmod +x "${cachedBin}"`);
+      console.log(`[OpenCOOP] Cloudflare binary downloaded: ${cachedBin}`);
+      return cachedBin;
+    } catch (err) {
+      throw new Error(`Failed to download cloudflared: ${(err as Error).message}`);
+    }
+  }
 
   async start(): Promise<string> {
     if (this.publicUrl) return this.publicUrl;
@@ -15,17 +65,9 @@ export class TunnelManager extends EventEmitter {
     }
     this.starting = true;
 
-    return new Promise((resolve, reject) => {
-      let binaryPath: string;
-      try {
-        const cloudflared = require("cloudflared");
-        // cloudflared package exports: DEFAULT_CLOUDFLARED_BIN or bin (string)
-        binaryPath = cloudflared.DEFAULT_CLOUDFLARED_BIN || cloudflared.bin || "cloudflared";
-        console.log(`[OpenCOOP] Cloudflare binary: ${binaryPath}`);
-      } catch {
-        binaryPath = "cloudflared";
-      }
+    const binaryPath = await this.ensureBinary();
 
+    return new Promise((resolve, reject) => {
       this.process = spawn(binaryPath, [
         "tunnel",
         "--url", "http://localhost:31313",
