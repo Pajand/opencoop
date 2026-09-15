@@ -120,23 +120,22 @@ Then add to your `~/.config/opencode/opencode.json`:
 3. Click **Generate Invite Link**
 4. Click **Copy Link** and **share** it with team members
 
-> The invite link uses an **automatic Cloudflare Tunnel** (`https://xxx.trycloudflare.com`),
+> The invite link uses an **automatic SSH tunnel** via tinyfi.sh (`https://xxx.tinyfi.sh`),
 > so team members can reach your server even behind NAT, firewall, or VPN.
 > No port forwarding, no static IP, no manual setup needed.
 
-## Automatic Cloudflare Tunnel (Zero Setup)
+## Automatic SSH Tunnel (Zero Setup)
 
 When **HOST** mode is active, OpenCOOP automatically:
 
-1. **Downloads** the `cloudflared` binary on first run (Linux / macOS / Windows, ~30 MB, cached in `~/.cache/cloudflared/`)
-2. **Opens** a secure tunnel to `http://localhost:31313`
-3. **Uses** the public `https://xxx.trycloudflare.com` URL in all invite links
+1. **Opens** an SSH reverse tunnel to `tinyfi.sh` (no binary download needed)
+2. **Forwards** traffic to `http://localhost:31313`
+3. **Uses** the public `https://xxx.tinyfi.sh` URL in all invite links
 
 You don't need to install or configure anything. Requirements:
 
 - **Node.js 18+** and **OpenCode** installed
-- **Internet access** (to download the binary once, and to keep the tunnel alive)
-- `curl` available on PATH (preinstalled on virtually all Linux/macOS systems and Windows 10+)
+- **SSH client** available on PATH (preinstalled on virtually all Linux/macOS/Windows systems)
 
 Notes:
 
@@ -344,7 +343,7 @@ This means OpenCode loads the plugin module but the HTTP server fails to start. 
 The HOST panel shows a live tunnel status badge. Check it first:
 
 1. **Fully restart OpenCode after install/update** — the plugin code loads only at startup. (Seeing new UI buttons but getting old-style links means the old code is still running in memory.)
-2. **Wait ~30s on first run** — the `cloudflared` binary (~30 MB) downloads once, then the tunnel needs a few seconds. The badge shows "starting..." meanwhile.
+2. **Wait a few seconds on first run** — the SSH tunnel connects to tinyfi.sh. The badge shows "starting..." meanwhile.
 3. **Mode must be HOST and saved** — click Save after selecting HOST; the tunnel starts on-demand.
 4. **Check the badge**: green = links use the tunnel; red = shows the exact error (no internet, download blocked, etc.). Check tunnel state manually: `curl http://localhost:31313/tunnel-url`.
 

@@ -906,13 +906,13 @@ export class OpenCOOPServer {
     return this.tunnelManager?.getUrl() || null;
   }
 
-  /** Start the Cloudflare tunnel if not already running. Safe to call multiple times. */
+  /** Start the SSH tunnel if not already running. Safe to call multiple times. */
   async ensureTunnel(): Promise<string | null> {
     if (this.tunnelManager?.getUrl()) return this.tunnelManager.getUrl();
     if (!this.tunnelManager) this.tunnelManager = new TunnelManager();
     try {
-      const tunnelUrl = await this.tunnelManager.start();
-      console.log(`[OpenCOOP] Cloudflare tunnel active: ${tunnelUrl}`);
+      const tunnelUrl = await this.tunnelManager.start(this.config.port);
+      console.log(`[OpenCOOP] Tunnel active: ${tunnelUrl}`);
       return tunnelUrl;
     } catch (err) {
       console.log("[OpenCOOP] Tunnel failed:", (err as Error).message);

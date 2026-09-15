@@ -225,7 +225,7 @@ async function loadTunnelStatus() {
       text.textContent = `Tunnel active: ${data.url}`;
     } else if (data.starting) {
       badge.className = 'tunnel-status starting';
-      text.textContent = 'Tunnel starting... (first run downloads ~30 MB, please wait)';
+      text.textContent = 'Tunnel starting... (SSH connecting, please wait)';
     } else if (data.error) {
       badge.className = 'tunnel-status failed';
       text.textContent = `Tunnel failed: ${data.error} — invite links use local IP`;
@@ -278,8 +278,8 @@ async function connectToHost() {
 
   try {
     // Extract tunnel URL from invite link
-    // Format: https://abc-xyz.trycloudflare.com/ui/invite/token123
-    // We need: https://abc-xyz.trycloudflare.com
+    // Format: https://abc-xyz.tinyfi.sh/ui/invite/token123
+    // We need: https://abc-xyz.tinyfi.sh
     if (hostUrl.includes('/ui/invite/')) {
       const urlObj = new URL(hostUrl);
       const tunnelBaseUrl = urlObj.origin;
