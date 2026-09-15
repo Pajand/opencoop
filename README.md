@@ -4,7 +4,7 @@
 
 # OpenCOOP
 
-![OpenCOOP](https://img.shields.io/badge/OpenCOOP-v1.10.4-blue)
+![OpenCOOP](https://img.shields.io/badge/OpenCOOP-v1.11.1-blue)
 ![License](https://img.shields.io/badge/License-Non--Commercial-blue)
 ![OpenCode](https://img.shields.io/badge/OpenCode-Plugin-purple)
 ![MCP](https://img.shields.io/badge/MCP-SSE-orange)
@@ -50,7 +50,7 @@ Developer A (Remote)           Developer B (Remote)
 | 🔒 **File Locking** | Prevents conflicts when multiple users edit the same file |
 | 🌐 **Web Dashboard** | Beautiful UI for configuration and monitoring |
 | 🔑 **Invite System** | Secure token-based team member invitations |
-| 🛡️ **Sandbox Security** | Path traversal protection and input validation |
+| 🛡️ **Sandbox Security** | Path traversal protection, symlink blocking, absolute path blocking, and input validation |
 | 📊 **Statistics** | View changes per user, recent activity, and more |
 
 ## Installation
@@ -268,12 +268,12 @@ curl -s -o /dev/null -w '%{http_code} %{content_type}\n' --max-time 3 -H 'Accept
 
 **If OpenCode is installed but `curl localhost:31313/health` fails:**
 - The plugin might be an old version without the HTTP server fix.
-- Check plugin version: `npm ls -g @opencoop/opencode-plugin` — must be `1.6.8` or newer.
+- Check plugin version: `npm ls -g @opencoop/opencode-plugin` — must be `1.11.1` or newer.
 - Clear plugin cache: `rm -rf ~/.cache/opencode/packages/@opencoop` (Linux/Mac) or delete `%USERPROFILE%\.cache\opencode\packages\@opencoop` (Windows).
 - Restart OpenCode.
 
 **If `curl /sse` returns HTML instead of event-stream:**
-- The running plugin version is older than 1.6.6.
+- The running plugin version is older than 1.11.1.
 - Update: `npm install -g @opencoop/opencode-plugin@latest`
 - Clear cache: `rm -rf ~/.cache/opencode/packages/@opencoop`
 - Restart OpenCode.
@@ -322,7 +322,7 @@ curl -s -o /dev/null -w '%{http_code} %{content_type}\n' --max-time 3 -H 'Accept
 
 This means OpenCode loads the plugin module but the HTTP server fails to start. Common causes:
 
-1. **Plugin version too old**: Must be `1.6.8` or newer. Check with `npm ls -g @opencoop/opencode-plugin`.
+1. **Plugin version too old**: Must be `1.11.1` or newer. Check with `npm ls -g @opencoop/opencode-plugin`.
 2. **Stale plugin cache**: OpenCode caches plugins in `~/.cache/opencode/packages/@opencoop`. After updating, clear it:
    ```bash
    rm -rf ~/.cache/opencode/packages/@opencoop

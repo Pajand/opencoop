@@ -4,7 +4,7 @@
 
 # اوپن‌کوپ
 
-![OpenCOOP](https://img.shields.io/badge/OpenCOOP-v1.10.4-blue)
+![OpenCOOP](https://img.shields.io/badge/OpenCOOP-v1.11.1-blue)
 ![License](https://img.shields.io/badge/License-Non--Commercial-blue)
 ![OpenCode](https://img.shields.io/badge/OpenCode-Plugin-purple)
 ![MCP](https://img.shields.io/badge/MCP-SSE-orange)
@@ -50,7 +50,7 @@
 | 🔒 **قفل فایل** | از تداخل جلوگیری می‌کند |
 | 🌐 **داشبورد وب** | رابط کاربری زیبا برای پیکربندی و نظارت |
 | 🔑 **سیستم دعوت** | دعوت امن اعضا با توکن |
-| 🛡️ **امنیت سندباکس** | محافظت در برابر عبور مسیر و اعتبارسنجی ورودی |
+| 🛡️ **امنیت سندباکس** | محافظت در برابر عبور مسیر، مسدودسازی symlink، مسدودسازی مسیر مطلق و اعتبارسنجی ورودی |
 | 📊 **آمار** | مشاهده تغییرات به ازای هر کاربر و فعالیت اخیر |
 
 ## نصب
@@ -262,12 +262,12 @@ curl -s -o /dev/null -w '%{http_code} %{content_type}\n' --max-time 3 -H 'Accept
 
 **اگه اوپن‌کد نصبه ولی `curl localhost:31313/health` جواب نمیده:**
 - ممکنه نسخه پلاگین قدیمی باشه (بدون فیکس سرور HTTP).
-- نسخه رو چک کن: `npm ls -g @opencoop/opencode-plugin` — باید `1.6.8` یا بالاتر باشه.
+- نسخه رو چک کن: `npm ls -g @opencoop/opencode-plugin` — باید `1.11.1` یا بالاتر باشه.
 - کش پلاگین رو پاک کن: `rm -rf ~/.cache/opencode/packages/@opencoop`
 - اوپن‌کد رو ری‌استارت کن.
 
 **اگه `curl /sse` به جای event-stream، HTML برمی‌گردوند:**
-- نسخه پلاگین در حال اجرا قدیمی‌تر از 1.6.6 است.
+- نسخه پلاگین در حال اجرا قدیمی‌تر از 1.11.1 است.
 - آپدیت: `npm install -g @opencoop/opencode-plugin@latest`
 - کش رو پاک کن: `rm -rf ~/.cache/opencode/packages/@opencoop`
 - اوپن‌کد رو ری‌استارت کن.
@@ -292,7 +292,7 @@ curl -s -o /dev/null -w '%{http_code} %{content_type}\n' --max-time 3 -H 'Accept
 
 یعنی اوپن‌کد ماژول پلاگین رو لود کرده ولی سرور HTTP بالا نیومده. دلایل رایج:
 
-1. **نسخه پلاگین خیلی قدیمیه**: باید `1.6.8` یا بالاتر باشه. با `npm ls -g @opencoop/opencode-plugin` چک کن.
+1. **نسخه پلاگین خیلی قدیمیه**: باید `1.11.1` یا بالاتر باشه. با `npm ls -g @opencoop/opencode-plugin` چک کن.
 2. **کش قدیمی پلاگین**: اوپن‌کد پلاگین‌ها رو توی `~/.cache/opencode/packages/@opencoop` کش می‌کنه. بعد از آپدیت پاکش کن:
    ```bash
    rm -rf ~/.cache/opencode/packages/@opencoop
