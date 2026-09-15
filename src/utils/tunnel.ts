@@ -78,12 +78,34 @@ export class TunnelManager extends EventEmitter {
     this.starting = true;
     this.lastError = null;
 
+    // Kill orphaned cloudflared processes from previous runs that still hold
+    // dead tunnels for our port (they cause confusing 530s on old URLs).
+    // Scoped to our exact target so users' own tunnels are never touched.
+    // Our child process isn't spawned yet, so no self-match is possible.
+    if (process.platform !== "win32") {
+      try {
+        const out = execSync('pgrep -af "cloudflared.*(localhost|127\\.0\\.0\\.1):31313" || true').toString().trim();
+        for (const line of out.split("\n")) {
+          const pid = parseInt(line.split(/\s+/)[0], 10);
+          if (pid > 1 && String(pid) !== String(process.pid)) {
+            try {
+              process.kill(pid, "SIGTERM");
+              console.log(`[OpenCOOP] Stopped stale tunnel process (pid ${pid})`);
+            } catch {}
+          }
+        }
+      } catch {}
+    }
+
     const binaryPath = await this.ensureBinary();
 
     return new Promise((resolve, reject) => {
+      // NOTE: 127.0.0.1 (not localhost) on purpose — localhost needs DNS and
+      // may resolve to ::1 (our server is IPv4-only), and VPNs often hijack
+      // localhost resolution. 127.0.0.1 always works.
       this.process = spawn(binaryPath, [
         "tunnel",
-        "--url", "http://localhost:31313",
+        "--url", "http://127.0.0.1:31313",
         "--no-autoupdate"
       ], {
         stdio: ["ignore", "pipe", "pipe"]
