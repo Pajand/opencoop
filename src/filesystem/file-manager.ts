@@ -5,15 +5,26 @@ import { FileMetadata } from "../types/index.js";
 
 export class FileManager {
   private workspacePath: string;
+  private normalizedWorkspace: string;
 
   constructor(workspacePath: string) {
     this.workspacePath = path.resolve(workspacePath);
+    this.normalizedWorkspace = this.workspacePath.endsWith(path.sep)
+      ? this.workspacePath
+      : this.workspacePath + path.sep;
   }
 
   private validatePath(relativePath: string): string {
+    // Block absolute paths — only relative paths within workspace are allowed
+    if (path.isAbsolute(relativePath)) {
+      throw new Error(`Access denied: absolute path "${relativePath}" is not allowed`);
+    }
+
     const resolved = path.resolve(this.workspacePath, relativePath);
 
-    if (!resolved.startsWith(this.workspacePath)) {
+    // Ensure resolved path is INSIDE workspace (not just a prefix match)
+    // e.g. /root/project2 should NOT match workspace /root/project
+    if (!resolved.startsWith(this.normalizedWorkspace) && resolved !== this.workspacePath) {
       throw new Error(`Access denied: path "${relativePath}" is outside the workspace`);
     }
 
@@ -101,6 +112,19 @@ export class FileManager {
 
       for (const entry of entries) {
         const entryPath = path.join(dir, entry.name);
+
+        // Security: skip symlinks that point outside workspace
+        if (entry.isSymbolicLink()) {
+          try {
+            const realPath = await fs.realpath(entryPath);
+            if (!realPath.startsWith(this.normalizedWorkspace)) {
+              continue;
+            }
+          } catch {
+            continue;
+          }
+        }
+
         const stat = await fs.stat(entryPath);
 
         results.push({
@@ -138,6 +162,17 @@ export class FileManager {
         if (results.length >= maxResults) break;
 
         const entryPath = path.join(dir, entry.name);
+
+        // Security: skip symlinks that point outside workspace
+        if (entry.isSymbolicLink()) {
+          try {
+            const realPath = await fs.realpath(entryPath);
+            if (!realPath.startsWith(this.normalizedWorkspace)) continue;
+          } catch {
+            continue;
+          }
+        }
+
         const relativePath = path.relative(this.workspacePath, entryPath);
 
         if (this.matchesGlob(entry.name, pattern)) {
@@ -170,6 +205,16 @@ export class FileManager {
 
       for (const entry of entries) {
         const entryPath = path.join(dir, entry.name);
+
+        // Security: skip symlinks that point outside workspace
+        if (entry.isSymbolicLink()) {
+          try {
+            const realPath = await fs.realpath(entryPath);
+            if (!realPath.startsWith(this.normalizedWorkspace)) continue;
+          } catch {
+            continue;
+          }
+        }
 
         if (entry.isDirectory()) {
           await walk(entryPath);
@@ -223,6 +268,16 @@ export class FileManager {
         }
 
         const entryPath = path.join(dir, entry.name);
+
+        // Security: skip symlinks that point outside workspace
+        if (entry.isSymbolicLink()) {
+          try {
+            const realPath = await fs.realpath(entryPath);
+            if (!realPath.startsWith(this.normalizedWorkspace)) continue;
+          } catch {
+            continue;
+          }
+        }
 
         if (entry.isDirectory()) {
           children.push({
