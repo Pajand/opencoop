@@ -34,27 +34,6 @@ export function normalizeHostUrl(input: string): string {
   }
 }
 
-const OPENCODE_CONFIG = path.join(os.homedir(), ".config", "opencode", "opencode.json");
-
-/**
- * Point the user's opencode.json MCP entry at the given SSE URL.
- * Used when joining as REMOTE (host tunnel) or switching back to HOST (localhost).
- * Returns true if the file was updated, false if it couldn't be (user must edit manually).
- */
-export async function updateMcpUrl(url: string): Promise<boolean> {
-  try {
-    const raw = await fs.readFile(OPENCODE_CONFIG, "utf-8");
-    const cfg = JSON.parse(raw);
-    cfg.mcp = cfg.mcp || {};
-    cfg.mcp.opencoop = { ...(cfg.mcp.opencoop || {}), type: "remote", url, enabled: true };
-    await fs.writeFile(OPENCODE_CONFIG, JSON.stringify(cfg, null, 2), "utf-8");
-    console.log(`[OpenCOOP] MCP URL auto-configured: ${url} (restart OpenCode to apply)`);
-    return true;
-  } catch (err) {
-    console.log("[OpenCOOP] Could not auto-configure MCP, manual edit needed:", (err as Error).message);
-    return false;
-  }
-}
 
 function getDefaultConfig(): ServerConfig {
   return {

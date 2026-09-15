@@ -280,14 +280,13 @@ async function connectToHost() {
     // Extract tunnel URL from invite link
     // Format: https://abc-xyz.trycloudflare.com/ui/invite/token123
     // We need: https://abc-xyz.trycloudflare.com
-    let mcpUrl = '';
     if (hostUrl.includes('/ui/invite/')) {
       const urlObj = new URL(hostUrl);
       const tunnelBaseUrl = urlObj.origin;
-      mcpUrl = `${tunnelBaseUrl}/sse`;
 
-      // Save tunnel URL to config (server also auto-updates opencode.json MCP url)
-      const saveRes = await fetch(`${API}/api/config`, {
+      // Save tunnel URL to config. The local MCP endpoint proxies to the host
+      // server-side, so tools serve host files instantly — no restart needed.
+      await fetch(`${API}/api/config`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -295,13 +294,8 @@ async function connectToHost() {
           hostUrl: tunnelBaseUrl,
         }),
       });
-      const saveData = await saveRes.json().catch(() => ({}));
 
-      if (saveData.mcpUpdated) {
-        showToast('success', 'Connected', 'opencode.json updated automatically.\nRestart OpenCode to access host files.');
-      } else {
-        showToast('success', 'Connected', `Set MCP URL manually: ${mcpUrl}\nThen restart OpenCode.`);
-      }
+      showToast('success', 'Connected', 'Tools now serve host files live. No restart needed.');
       return;
     }
 

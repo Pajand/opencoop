@@ -3,6 +3,7 @@ import { z } from "zod";
 import { randomUUID } from "crypto";
 import { loadConfig } from "./utils/config.js";
 import { OpenCOOPServer } from "./server/mcp-server.js";
+import { proxyForward } from "./server/host-proxy.js";
 import { FileManager } from "./filesystem/file-manager.js";
 import { LockManager } from "./filesystem/lock-manager.js";
 import { ChangeTracker } from "./filesystem/change-tracker.js";
@@ -262,6 +263,19 @@ const plugin: PluginModule = {
       );
 
       console.log(`[OpenCOOP] Registered ${Object.keys(tools).length} tools`);
+
+      // REMOTE-mode proxy (single interception point for ALL in-process tools):
+      // in REMOTE mode every call is forwarded to the host server over its
+      // tunnel; in HOST mode proxyForward() returns null and the original
+      // local handler runs completely untouched. No restart ever needed.
+      for (const [toolName, t] of Object.entries(tools)) {
+        const origExecute = (t as any).execute;
+        (t as any).execute = async (a: any, ctx: any) => {
+          const px = await proxyForward(toolName, a);
+          if (px !== null) return px;
+          return origExecute(a, ctx);
+        };
+      }
 
       return {
         tool: tools,

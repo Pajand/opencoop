@@ -2,7 +2,7 @@ import express from "express";
 import path from "path";
 import { fileURLToPath } from "url";
 import { ServerConfig } from "../types/index.js";
-import { saveConfig, normalizeHostUrl, updateMcpUrl } from "../utils/config.js";
+import { saveConfig, normalizeHostUrl } from "../utils/config.js";
 import { AuthManager } from "../auth/auth-manager.js";
 import { ChangeTracker } from "../filesystem/change-tracker.js";
 import { SessionManager } from "../auth/session-manager.js";
@@ -44,17 +44,14 @@ export async function createWebUI(
       await saveConfig(config);
       // If user switched to HOST mode at runtime, start the tunnel on-demand
       // so invite links work immediately without a restart.
+      // NOTE: opencode.json is intentionally NEVER rewritten here. The MCP url
+      // stays fixed (localhost) and REMOTE traffic is proxied to the host
+      // server-side — so Connect works instantly with zero restarts.
       let tunnelUrl: string | null = null;
-      let mcpUpdated = false;
-      if (config.mode === "host") {
-        if (ensureTunnel) tunnelUrl = await ensureTunnel();
-        // Point MCP back at the local server.
-        mcpUpdated = await updateMcpUrl(`http://localhost:${config.port}/sse`);
-      } else if (config.mode === "remote" && config.hostUrl) {
-        // Point MCP at the host's tunnel so AI tools operate on the HOST's files.
-        mcpUpdated = await updateMcpUrl(`${config.hostUrl}/sse`);
+      if (config.mode === "host" && ensureTunnel) {
+        tunnelUrl = await ensureTunnel();
       }
-      res.json({ success: true, config, tunnelUrl, mcpUpdated });
+      res.json({ success: true, config, tunnelUrl });
     } catch (error) {
       res.status(500).json({ success: false, error: "Failed to save config" });
     }

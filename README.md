@@ -4,7 +4,7 @@
 
 # OpenCOOP
 
-![OpenCOOP](https://img.shields.io/badge/OpenCOOP-v1.9.0-blue)
+![OpenCOOP](https://img.shields.io/badge/OpenCOOP-v1.10.0-blue)
 ![License](https://img.shields.io/badge/License-Non--Commercial-blue)
 ![OpenCode](https://img.shields.io/badge/OpenCode-Plugin-purple)
 ![MCP](https://img.shields.io/badge/MCP-SSE-orange)
@@ -147,14 +147,14 @@ Notes:
 ### REMOTE Mode (Team Member)
 
 1. **Install** the plugin on your machine
-2. Add to your `opencode.json` (same as HOST setup)
-3. **Restart** OpenCode
+2. Add to your `opencode.json` (same as HOST setup — the MCP `url` stays `http://localhost:31313/sse` forever)
+3. **Restart** OpenCode (only this once, for the initial install)
 4. Open `http://localhost:31313/ui`
 5. Select **REMOTE** mode
 6. **Paste** the host's invite link
-7. Click **Connect** — this automatically rewrites your `opencode.json` MCP `url` to the host's tunnel (`https://xxx.trycloudflare.com/sse`)
-8. **Restart OpenCode** so the MCP client reconnects through the tunnel
-9. Your AI now reads/writes the **HOST's project folder live** — every tool call goes to the host server
+7. Click **Connect** — done. No restart, no config edits.
+
+Your local server now **proxies every tool call to the host over its tunnel**, so your AI reads/writes the **HOST's project folder live**. Switching hosts or a fresh host tunnel URL? Just paste the new link and Connect again — instant.
 
 ## MCP Tools
 

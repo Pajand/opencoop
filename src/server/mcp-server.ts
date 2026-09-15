@@ -16,6 +16,7 @@ import { ServerConfig } from "../types/index.js";
 import { initDatabase, startAutoSave, stopAutoSave } from "../utils/database.js";
 import { createWebUI } from "../web/server.js";
 import { TunnelManager } from "../utils/tunnel.js";
+import { proxyForward, closeProxy } from "./host-proxy.js";
 
 export class OpenCOOPServer {
   private config: ServerConfig;
@@ -63,6 +64,23 @@ export class OpenCOOPServer {
       version: "1.0.0",
     });
 
+    // REMOTE-mode proxy (single interception point for ALL tools, incl. future ones):
+    // in REMOTE mode every call is forwarded to the host server over its tunnel;
+    // in HOST mode proxyForward() returns null and the original local handler
+    // runs completely untouched.
+    const origTool = server.tool.bind(server);
+    (server as any).tool = (name: string, ...rest: any[]) => {
+      const last = rest[rest.length - 1];
+      if (typeof last === "function") {
+        rest[rest.length - 1] = async (args: any, extra: any) => {
+          const px = await proxyForward(name, args);
+          if (px !== null) return { content: [{ type: "text" as const, text: px }] };
+          return last(args, extra);
+        };
+      }
+      return (origTool as any)(name, ...rest);
+    };
+
     this.registerFileTools(server);
     this.registerLockTools(server);
     this.registerMonitoringTools(server);
@@ -94,6 +112,9 @@ export class OpenCOOPServer {
   }
 
   private async callTool(name: string, args: any): Promise<string> {
+    // REMOTE mode: forward to host; HOST mode: run locally (unchanged).
+    const px = await proxyForward(name, args);
+    if (px !== null) return px;
     const userId = "user-" + randomUUID().slice(0, 8);
     try {
       switch (name) {
@@ -846,6 +867,10 @@ export class OpenCOOPServer {
   }
 
   async stop(): Promise<void> {
+    // Drop any host proxy connection
+    try {
+      await closeProxy();
+    } catch {}
     // Stop Cloudflare tunnel
     if (this.tunnelManager) {
       this.tunnelManager.stop();
