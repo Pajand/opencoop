@@ -137,7 +137,7 @@ export class OpenCOOPServer {
         case "who_is_online":
           return JSON.stringify(await this.sessionManager.getOnlineUsers(this.config.workspacePath), null, 2);
         case "invite_member": {
-          const link = await this.authManager.generateInviteLink({ workspaceId: this.config.workspacePath, email: args.email, permissions: args.permissions, expiresInDays: args.expires_in_days || 7, createdBy: userId, port: this.config.port });
+          const link = await this.authManager.generateInviteLink({ workspaceId: this.config.workspacePath, email: args.email, permissions: args.permissions, expiresInDays: args.expires_in_days || 7, createdBy: userId, port: this.config.port, tunnelUrl: this.tunnelManager?.getUrl() || undefined });
           return JSON.stringify(link);
         }
         case "list_members":
@@ -463,6 +463,7 @@ export class OpenCOOPServer {
           expiresInDays: expires_in_days || 7,
           createdBy: userId,
           port: this.config.port,
+          tunnelUrl: this.tunnelManager?.getUrl() || undefined,
         });
         return {
           content: [{ type: "text" as const, text: JSON.stringify(link) }],
@@ -811,7 +812,7 @@ export class OpenCOOPServer {
     app.get("/invite/:token", (req, res) => res.redirect(`/ui/invite/${req.params.token}`));
 
     // Web UI - mounted at /ui to avoid SPA fallback intercepting MCP endpoints
-    const webApp = await createWebUI(this.config);
+    const webApp = await createWebUI(this.config, () => this.tunnelManager?.getUrl() || null);
     app.use("/ui", webApp);
     app.get("/", (_req, res) => res.redirect("/ui/"));
 

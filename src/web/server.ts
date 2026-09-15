@@ -11,7 +11,7 @@ import { initDatabase, getAllRows, getRow } from "../utils/database.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-export async function createWebUI(config: ServerConfig): Promise<express.Express> {
+export async function createWebUI(config: ServerConfig, getTunnelUrl?: () => string | null): Promise<express.Express> {
   const app = express();
   app.use(express.json());
   app.use(express.static(path.join(__dirname, "public")));
@@ -103,6 +103,7 @@ export async function createWebUI(config: ServerConfig): Promise<express.Express
         expiresInDays: expires_in_days || 7,
         createdBy: ownerId,
         port: config.port,
+        tunnelUrl: getTunnelUrl?.() || undefined,
       });
       res.json({ success: true, invite: link });
     } catch (error) {
