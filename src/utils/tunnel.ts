@@ -3,7 +3,7 @@ import { EventEmitter } from "events";
 import { existsSync, mkdirSync } from "fs";
 import { join, dirname } from "path";
 
-const CLOUDFLARED_VERSION = "2025.2.1";
+const CLOUDFLARED_VERSION = "2026.9.1";
 
 export class TunnelManager extends EventEmitter {
   private process: ChildProcess | null = null;
@@ -106,7 +106,8 @@ export class TunnelManager extends EventEmitter {
       this.process = spawn(binaryPath, [
         "tunnel",
         "--url", "http://127.0.0.1:31313",
-        "--no-autoupdate"
+        "--no-autoupdate",
+        "--protocol", "http2"
       ], {
         stdio: ["ignore", "pipe", "pipe"]
       });
