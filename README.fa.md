@@ -4,7 +4,7 @@
 
 # اوپن‌کوپ
 
-![OpenCOOP](https://img.shields.io/badge/OpenCOOP-v1.10.0-blue)
+![OpenCOOP](https://img.shields.io/badge/OpenCOOP-v1.10.1-blue)
 ![License](https://img.shields.io/badge/License-Non--Commercial-blue)
 ![OpenCode](https://img.shields.io/badge/OpenCode-Plugin-purple)
 ![MCP](https://img.shields.io/badge/MCP-SSE-orange)
@@ -153,6 +153,8 @@ npm link
 7. روی **اتصال** کلیک کنید — تمام. بدون ری‌استارت، بدون ویرایش کانفیگ.
 
 سرور محلی شما حالا **هر فراخوانی ابزار را از طریق تونل به میزبان فوروارد می‌کند**، پس هوش مصنوعی شما **به‌صورت زنده پوشه پروژه میزبان** را می‌خواند و می‌نویسد. میزبان عوض شد یا آدرس تونل تازه شد؟ فقط لینک جدید را Paste و Connect بزنید — در لحظه.
+
+> حالت REMOTE را به تونل خودش یا به یک REMOTE دیگر وصل نکنید (حلقه) — همیشه به یک HOST وصل شوید.
 
 ## ابزارهای MCP
 

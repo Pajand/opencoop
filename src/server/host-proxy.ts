@@ -1,5 +1,5 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js";
+import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { loadConfig } from "../utils/config.js";
 
 const CONNECT_TIMEOUT_MS = 30000;
@@ -66,7 +66,10 @@ async function getClient(target: string): Promise<Client> {
   const promise = (async () => {
     const client = new Client({ name: "opencoop-remote-proxy", version: "1.0.0" }, { capabilities: {} });
     clientRef = client;
-    await client.connect(new SSEClientTransport(new URL(`${target}/sse`)));
+    // NOTE: Streamable HTTP (not SSE) — plain request/response JSON survives
+    // Cloudflare tunnels, while long-lived SSE streams stall (headers arrive,
+    // body chunks never do). Our /mcp endpoint is stateless (no session id).
+    await client.connect(new StreamableHTTPClientTransport(new URL(`${target}/mcp`)));
     return client;
   })();
   connecting = { target, promise };
@@ -103,10 +106,24 @@ function errMsg(err: unknown): string {
  * Forward one tool call to the host. Returns the result text, or null when
  * this server is NOT in REMOTE mode (caller runs its local handler).
  * Never throws: failures come back as "Error: ..." text so the AI sees them.
+ *
+ * ownPort: this server's own HTTP port. A server must never proxy to itself
+ * (e.g. disk config points back at localhost:ownPort) — in that case serve
+ * locally instead of ping-ponging until timeout.
  */
-export async function proxyForward(toolName: string, args: any): Promise<string | null> {
+export async function proxyForward(toolName: string, args: any, ownPort?: number): Promise<string | null> {
   const target = await getProxyTarget();
   if (!target) return null;
+
+  if (ownPort) {
+    try {
+      const u = new URL(target);
+      const isLoopback = (u.hostname === "localhost" || u.hostname === "127.0.0.1") && Number(u.port) === ownPort;
+      if (isLoopback) return null;
+    } catch {
+      // Unparseable target: let the connection attempt below report the error.
+    }
+  }
 
   let client: Client;
   try {

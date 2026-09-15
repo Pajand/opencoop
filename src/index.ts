@@ -271,7 +271,7 @@ const plugin: PluginModule = {
       for (const [toolName, t] of Object.entries(tools)) {
         const origExecute = (t as any).execute;
         (t as any).execute = async (a: any, ctx: any) => {
-          const px = await proxyForward(toolName, a);
+          const px = await proxyForward(toolName, a, config.port);
           if (px !== null) return px;
           return origExecute(a, ctx);
         };

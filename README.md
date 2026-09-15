@@ -4,7 +4,7 @@
 
 # OpenCOOP
 
-![OpenCOOP](https://img.shields.io/badge/OpenCOOP-v1.10.0-blue)
+![OpenCOOP](https://img.shields.io/badge/OpenCOOP-v1.10.1-blue)
 ![License](https://img.shields.io/badge/License-Non--Commercial-blue)
 ![OpenCode](https://img.shields.io/badge/OpenCode-Plugin-purple)
 ![MCP](https://img.shields.io/badge/MCP-SSE-orange)
@@ -155,6 +155,8 @@ Notes:
 7. Click **Connect** — done. No restart, no config edits.
 
 Your local server now **proxies every tool call to the host over its tunnel**, so your AI reads/writes the **HOST's project folder live**. Switching hosts or a fresh host tunnel URL? Just paste the new link and Connect again — instant.
+
+> Do not point REMOTE at its own tunnel URL or at another REMOTE (loop) — always connect to a HOST.
 
 ## MCP Tools
 

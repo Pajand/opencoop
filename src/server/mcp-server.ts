@@ -73,7 +73,7 @@ export class OpenCOOPServer {
       const last = rest[rest.length - 1];
       if (typeof last === "function") {
         rest[rest.length - 1] = async (args: any, extra: any) => {
-          const px = await proxyForward(name, args);
+          const px = await proxyForward(name, args, this.config.port);
           if (px !== null) return { content: [{ type: "text" as const, text: px }] };
           return last(args, extra);
         };
@@ -113,7 +113,7 @@ export class OpenCOOPServer {
 
   private async callTool(name: string, args: any): Promise<string> {
     // REMOTE mode: forward to host; HOST mode: run locally (unchanged).
-    const px = await proxyForward(name, args);
+    const px = await proxyForward(name, args, this.config.port);
     if (px !== null) return px;
     const userId = "user-" + randomUUID().slice(0, 8);
     try {
