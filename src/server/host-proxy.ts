@@ -103,6 +103,32 @@ function errMsg(err: unknown): string {
 }
 
 /**
+ * Translate low-level failures into actionable guidance for the AI/user.
+ * The two common cases:
+ *  - Cloudflare 1033/530: tunnel edge answers but the host's OpenCOOP
+ *    server behind it is DOWN (closed browser, old version, stale link).
+ *  - DNS/fetch failure: the tunnel hostname is gone = stale invite link.
+ */
+function hostAdvice(target: string, detail: string): string {
+  const d = detail.toLowerCase();
+  if (d.includes("1033") || d.includes(" 530") || d.includes("tunnel error")) {
+    return (
+      `Error: host tunnel is reachable but the server behind it is DOWN (Cloudflare tunnel error). ` +
+      `On the HOST machine: 1) install latest plugin (npm i -g @opencoop/opencode-plugin@latest) and clear the plugin cache, ` +
+      `2) fully restart OpenCode, 3) open the web UI and select HOST mode (green tunnel badge must appear), ` +
+      `4) Generate a FRESH invite link (tunnel URLs expire on restart) and Connect again here. Detail: ${detail}`
+    );
+  }
+  if (d.includes("fetch failed") || d.includes("enotfound") || d.includes("eai_again") || d.includes("getaddrinfo") || d.includes("econnrefused")) {
+    return (
+      `Error: cannot reach host at ${target} (tunnel address is gone). ` +
+      `The invite link is STALE — Generate a FRESH invite link on the HOST machine and Connect again here. Detail: ${detail}`
+    );
+  }
+  return `Error: host tool call failed (${target}): ${detail}`;
+}
+
+/**
  * Forward one tool call to the host. Returns the result text, or null when
  * this server is NOT in REMOTE mode (caller runs its local handler).
  * Never throws: failures come back as "Error: ..." text so the AI sees them.
@@ -129,7 +155,7 @@ export async function proxyForward(toolName: string, args: any, ownPort?: number
   try {
     client = await withTimeout(getClient(target), CONNECT_TIMEOUT_MS, "Host connection");
   } catch (err) {
-    return `Error: cannot reach host at ${target}: ${errMsg(err)}. Check the tunnel status in the web UI (HOST panel on the host machine).`;
+    return hostAdvice(target, errMsg(err));
   }
 
   try {
@@ -146,6 +172,6 @@ export async function proxyForward(toolName: string, args: any, ownPort?: number
     return JSON.stringify(result);
   } catch (err) {
     if (!isRpcError(err)) await closeProxy();
-    return `Error: host tool '${toolName}' failed: ${errMsg(err)}`;
+    return hostAdvice(target, `host tool '${toolName}' failed: ${errMsg(err)}`);
   }
 }
