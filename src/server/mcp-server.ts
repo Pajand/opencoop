@@ -15,6 +15,7 @@ import { logger } from "../utils/logger.js";
 import { ServerConfig } from "../types/index.js";
 import { initDatabase, startAutoSave, stopAutoSave } from "../utils/database.js";
 import { createWebUI } from "../web/server.js";
+import { TunnelManager } from "../utils/tunnel.js";
 
 export class OpenCOOPServer {
   private config: ServerConfig;
@@ -26,6 +27,7 @@ export class OpenCOOPServer {
   private transports: Map<string, StreamableHTTPServerTransport> = new Map();
   private sseTransports: Map<string, SSEServerTransport> = new Map();
   private httpServer: any = null;
+  private tunnelManager: TunnelManager | null = null;
 
   constructor(config: ServerConfig) {
     this.config = config;
@@ -520,6 +522,10 @@ export class OpenCOOPServer {
       res.json({ status: "ok", version: "1.0.0" });
     });
 
+    app.get("/tunnel-url", (req, res) => {
+      res.json({ url: this.tunnelManager?.getUrl() || null });
+    });
+
     // SSE endpoint - OpenCode connects here when url ends with /sse
     // This avoids the StreamableHTTP Accept header issue
     app.get("/sse", async (req, res) => {
@@ -809,6 +815,18 @@ export class OpenCOOPServer {
     app.use("/ui", webApp);
     app.get("/", (_req, res) => res.redirect("/ui/"));
 
+    // Start Cloudflare Tunnel for HOST mode
+    if (this.config.mode === "host") {
+      this.tunnelManager = new TunnelManager();
+      try {
+        const tunnelUrl = await this.tunnelManager.start();
+        console.log(`[OpenCOOP] Cloudflare tunnel active: ${tunnelUrl}`);
+      } catch (err) {
+        console.log("[OpenCOOP] Tunnel failed:", (err as Error).message);
+        console.log("[OpenCOOP] Invite links will use local IP (may not work with VPN)");
+      }
+    }
+
     return new Promise((resolve, reject) => {
       this.httpServer = app.listen(port, '0.0.0.0', () => {
         logger.info(`OpenCOOP server listening on 0.0.0.0:${port}`);
@@ -826,6 +844,12 @@ export class OpenCOOPServer {
   }
 
   async stop(): Promise<void> {
+    // Stop Cloudflare tunnel
+    if (this.tunnelManager) {
+      this.tunnelManager.stop();
+      this.tunnelManager = null;
+    }
+
     stopAutoSave();
 
     for (const [sid, transport] of this.transports) {
@@ -849,5 +873,9 @@ export class OpenCOOPServer {
     } catch {
       // Ignore close errors
     }
+  }
+
+  getTunnelUrl(): string | null {
+    return this.tunnelManager?.getUrl() || null;
   }
 }

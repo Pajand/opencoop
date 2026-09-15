@@ -23,6 +23,8 @@ function defineTool(desc: string, args: any, exec: any) {
   return { description: desc, args, execute: exec };
 }
 
+let globalTunnelUrl: string | null = null;
+
 const plugin: PluginModule = {
   id: "opencoop",
   server: async (_input: PluginInput) => {
@@ -65,10 +67,19 @@ const plugin: PluginModule = {
 
       if (alive) {
         console.log(`[OpenCOOP] Server already running on port ${port} - reusing`);
+        // Fetch tunnel URL from running server
+        try {
+          const tunnelRes = await fetch(`http://127.0.0.1:${port}/tunnel-url`);
+          if (tunnelRes.ok) {
+            const tunnelData = await tunnelRes.json() as { url?: string };
+            if (tunnelData.url) globalTunnelUrl = tunnelData.url;
+          }
+        } catch {}
       } else {
         serverInstance = new OpenCOOPServer(config);
         try {
           await serverInstance.startHttp(port);
+          globalTunnelUrl = serverInstance.getTunnelUrl();
           console.log(`[OpenCOOP] Server ready on port ${port}`);
         } catch (error: any) {
           console.log("[OpenCOOP] Failed to start server:", error instanceof Error ? error.message : String(error));
@@ -225,7 +236,8 @@ const plugin: PluginModule = {
         { email: z.string(), permissions: z.array(z.enum(["read", "write", "admin"])), expires_in_days: z.number().optional() },
         async (args: any, _ctx: any) => {
           const uid = userId();
-          const link = await authManager.generateInviteLink({ workspaceId: workspacePath, email: args.email, permissions: args.permissions, expiresInDays: args.expires_in_days || 7, createdBy: uid, port });
+            const tunnelUrl = globalTunnelUrl || serverInstance?.getTunnelUrl() || undefined;
+          const link = await authManager.generateInviteLink({ workspaceId: workspacePath, email: args.email, permissions: args.permissions, expiresInDays: args.expires_in_days || 7, createdBy: uid, port, tunnelUrl });
           return JSON.stringify(link);
         }
       );

@@ -240,6 +240,30 @@ async function connectToHost() {
   }
 
   try {
+    // Extract tunnel URL from invite link
+    // Format: https://abc-xyz.trycloudflare.com/ui/invite/token123
+    // We need: https://abc-xyz.trycloudflare.com
+    let mcpUrl = '';
+    if (hostUrl.includes('/ui/invite/')) {
+      const urlObj = new URL(hostUrl);
+      const tunnelBaseUrl = urlObj.origin;
+      mcpUrl = `${tunnelBaseUrl}/sse`;
+
+      // Save tunnel URL to config
+      await fetch(`${API}/api/config`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mode: 'remote',
+          hostUrl: tunnelBaseUrl,
+        }),
+      });
+
+      showToast('success', 'Connected', `MCP URL: ${mcpUrl}\nRestart OpenCode to activate.`);
+      return;
+    }
+
+    // Fallback: validate as invite token
     const token = hostUrl.split('/invite/')[1];
     if (token) {
       const res = await fetch(`${API}/api/invite/validate/${token}`);

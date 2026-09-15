@@ -97,6 +97,7 @@ export class AuthManager {
     expiresInDays: number;
     createdBy: string;
     port?: number;
+    tunnelUrl?: string;
   }): Promise<{
     link: string;
     token: string;
@@ -121,8 +122,16 @@ export class AuthManager {
       ]
     );
 
+    // Use tunnel URL if available, otherwise fallback to local IP
+    let hostAddress: string;
+    if (params.tunnelUrl) {
+      hostAddress = params.tunnelUrl;
+    } else {
+      hostAddress = `http://${this.getLocalIP()}:${params.port || 31313}`;
+    }
+
     return {
-      link: `http://${this.getLocalIP()}:${params.port || 31313}/ui/invite/${token}`,
+      link: `${hostAddress}/ui/invite/${token}`,
       token,
       expiresAt,
     };
