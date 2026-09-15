@@ -2,17 +2,81 @@ import { spawn, execSync, ChildProcess } from "child_process";
 import { EventEmitter } from "events";
 import { existsSync, mkdirSync } from "fs";
 import { join, dirname } from "path";
+import http from "http";
 
 const CLOUDFLARED_VERSION = "2026.9.1";
+const HEALTH_CHECK_INTERVAL = 30_000;
+const HEALTH_CHECK_TIMEOUT = 10_000;
+const MAX_RESTART_ATTEMPTS = 5;
+const RESTART_BACKOFF = 5_000;
 
 export class TunnelManager extends EventEmitter {
   private process: ChildProcess | null = null;
   private publicUrl: string | null = null;
   private starting = false;
   private lastError: string | null = null;
+  private healthTimer: ReturnType<typeof setInterval> | null = null;
+  private restartAttempts = 0;
 
   getStatus(): { url: string | null; starting: boolean; error: string | null } {
     return { url: this.publicUrl, starting: this.starting, error: this.lastError };
+  }
+
+  private startHealthCheck(): void {
+    this.stopHealthCheck();
+    this.healthTimer = setInterval(() => {
+      this.checkTunnelHealth();
+    }, HEALTH_CHECK_INTERVAL);
+  }
+
+  private stopHealthCheck(): void {
+    if (this.healthTimer) {
+      clearInterval(this.healthTimer);
+      this.healthTimer = null;
+    }
+  }
+
+  private checkTunnelHealth(): void {
+    if (!this.publicUrl || !this.process) return;
+
+    const req = http.get(this.publicUrl + "/health", { timeout: HEALTH_CHECK_TIMEOUT }, (res) => {
+      if (res.statusCode === 200) {
+        this.restartAttempts = 0;
+        return;
+      }
+      console.log(`[OpenCOOP] Tunnel health check failed: HTTP ${res.statusCode}`);
+      this.restartTunnel();
+    });
+
+    req.on("error", () => {
+      console.log("[OpenCOOP] Tunnel health check failed: connection error");
+      this.restartTunnel();
+    });
+
+    req.on("timeout", () => {
+      req.destroy();
+      console.log("[OpenCOOP] Tunnel health check failed: timeout");
+      this.restartTunnel();
+    });
+  }
+
+  private restartTunnel(): void {
+    if (this.restartAttempts >= MAX_RESTART_ATTEMPTS) {
+      console.log(`[OpenCOOP] Tunnel restart limit reached (${MAX_RESTART_ATTEMPTS}). Giving up.`);
+      this.stopHealthCheck();
+      return;
+    }
+
+    this.restartAttempts++;
+    const delay = RESTART_BACKOFF * this.restartAttempts;
+    console.log(`[OpenCOOP] Restarting tunnel in ${delay}ms (attempt ${this.restartAttempts}/${MAX_RESTART_ATTEMPTS})`);
+
+    this.stop();
+    setTimeout(() => {
+      this.start().catch((err) => {
+        console.log(`[OpenCOOP] Tunnel restart failed: ${(err as Error).message}`);
+      });
+    }, delay);
   }
 
   private async ensureBinary(): Promise<string> {
@@ -109,8 +173,10 @@ export class TunnelManager extends EventEmitter {
         "--no-autoupdate",
         "--protocol", "http2"
       ], {
-        stdio: ["ignore", "pipe", "pipe"]
+        stdio: ["ignore", "pipe", "pipe"],
+        detached: true
       });
+      this.process.unref();
 
       let urlFound = false;
 
@@ -122,6 +188,7 @@ export class TunnelManager extends EventEmitter {
           this.publicUrl = match[1];
           this.starting = false;
           this.emit("url", this.publicUrl);
+          this.startHealthCheck();
           resolve(this.publicUrl);
         }
       };
@@ -138,10 +205,17 @@ export class TunnelManager extends EventEmitter {
 
       this.process.on("exit", (code) => {
         this.starting = false;
+        const hadUrl = urlFound;
         if (!urlFound) this.lastError = `tunnel exited with code ${code}`;
         this.publicUrl = null;
         this.process = null;
+        this.stopHealthCheck();
         console.log(`[OpenCOOP] Cloudflare tunnel exited with code ${code}`);
+
+        if (hadUrl) {
+          console.log("[OpenCOOP] Tunnel died unexpectedly, restarting...");
+          this.restartTunnel();
+        }
       });
 
       setTimeout(() => {
@@ -155,7 +229,11 @@ export class TunnelManager extends EventEmitter {
   }
 
   stop(): void {
+    this.stopHealthCheck();
     if (this.process) {
+      try {
+        process.kill(-this.process.pid!, "SIGTERM");
+      } catch {}
       this.process.kill();
       this.process = null;
       this.publicUrl = null;
