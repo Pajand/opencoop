@@ -42,15 +42,22 @@ export class TunnelManager extends EventEmitter {
     console.log("[OpenCOOP] Downloading cloudflared binary...");
     if (!existsSync(cacheDir)) mkdirSync(cacheDir, { recursive: true });
 
-    const platform = process.platform === "linux" ? "linux" : process.platform;
+    const platformMap: Record<string, string> = { linux: "linux", darwin: "darwin", win32: "windows" };
+    const platform = platformMap[process.platform] || "linux";
     const arch = process.arch === "arm64" ? "arm64" : "amd64";
-    const url = `https://github.com/cloudflare/cloudflared/releases/download/${CLOUDFLARED_VERSION}/cloudflared-${platform}-${arch}`;
+    const ext = process.platform === "win32" ? ".exe" : "";
+    const fileName = `cloudflared-${platform}-${arch}${ext}`;
+    const url = `https://github.com/cloudflare/cloudflared/releases/download/${CLOUDFLARED_VERSION}/${fileName}`;
+    const targetBin = join(cacheDir, `cloudflared${ext}`);
 
     try {
-      execSync(`curl -fsSL -o "${cachedBin}" "${url}"`, { timeout: 60000 });
-      execSync(`chmod +x "${cachedBin}"`);
-      console.log(`[OpenCOOP] Cloudflare binary downloaded: ${cachedBin}`);
-      return cachedBin;
+      if (process.platform === "win32") {
+        execSync(`curl -fsSL -o "${targetBin}" "${url}"`, { timeout: 60000 });
+      } else {
+        execSync(`curl -fsSL -o "${targetBin}" "${url}" && chmod +x "${targetBin}"`, { timeout: 60000 });
+      }
+      console.log(`[OpenCOOP] Cloudflare binary downloaded: ${targetBin}`);
+      return targetBin;
     } catch (err) {
       throw new Error(`Failed to download cloudflared: ${(err as Error).message}`);
     }

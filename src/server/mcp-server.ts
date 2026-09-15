@@ -812,7 +812,12 @@ export class OpenCOOPServer {
     app.get("/invite/:token", (req, res) => res.redirect(`/ui/invite/${req.params.token}`));
 
     // Web UI - mounted at /ui to avoid SPA fallback intercepting MCP endpoints
-    const webApp = await createWebUI(this.config, () => this.tunnelManager?.getUrl() || null);
+    // ensureTunnel lets the UI start the tunnel on-demand (e.g. user switches to HOST mode at runtime)
+    const webApp = await createWebUI(
+      this.config,
+      () => this.tunnelManager?.getUrl() || null,
+      () => this.ensureTunnel()
+    );
     app.use("/ui", webApp);
     app.get("/", (_req, res) => res.redirect("/ui/"));
 
@@ -822,14 +827,7 @@ export class OpenCOOPServer {
 
         // Start Cloudflare Tunnel AFTER server is listening
         if (this.config.mode === "host") {
-          this.tunnelManager = new TunnelManager();
-          try {
-            const tunnelUrl = await this.tunnelManager.start();
-            console.log(`[OpenCOOP] Cloudflare tunnel active: ${tunnelUrl}`);
-          } catch (err) {
-            console.log("[OpenCOOP] Tunnel failed:", (err as Error).message);
-            console.log("[OpenCOOP] Invite links will use local IP (may not work with VPN)");
-          }
+          await this.ensureTunnel();
         }
 
         resolve();
@@ -879,5 +877,20 @@ export class OpenCOOPServer {
 
   getTunnelUrl(): string | null {
     return this.tunnelManager?.getUrl() || null;
+  }
+
+  /** Start the Cloudflare tunnel if not already running. Safe to call multiple times. */
+  async ensureTunnel(): Promise<string | null> {
+    if (this.tunnelManager?.getUrl()) return this.tunnelManager.getUrl();
+    if (!this.tunnelManager) this.tunnelManager = new TunnelManager();
+    try {
+      const tunnelUrl = await this.tunnelManager.start();
+      console.log(`[OpenCOOP] Cloudflare tunnel active: ${tunnelUrl}`);
+      return tunnelUrl;
+    } catch (err) {
+      console.log("[OpenCOOP] Tunnel failed:", (err as Error).message);
+      console.log("[OpenCOOP] Invite links will use local IP (may not work with VPN)");
+      return null;
+    }
   }
 }

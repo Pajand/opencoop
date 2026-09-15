@@ -11,7 +11,11 @@ import { initDatabase, getAllRows, getRow } from "../utils/database.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-export async function createWebUI(config: ServerConfig, getTunnelUrl?: () => string | null): Promise<express.Express> {
+export async function createWebUI(
+  config: ServerConfig,
+  getTunnelUrl?: () => string | null,
+  ensureTunnel?: () => Promise<string | null>
+): Promise<express.Express> {
   const app = express();
   app.use(express.json());
   app.use(express.static(path.join(__dirname, "public")));
@@ -38,7 +42,13 @@ export async function createWebUI(config: ServerConfig, getTunnelUrl?: () => str
       if (workspacePath) config.workspacePath = workspacePath;
       if (hostUrl !== undefined) config.hostUrl = hostUrl;
       await saveConfig(config);
-      res.json({ success: true, config });
+      // If user switched to HOST mode at runtime, start the tunnel on-demand
+      // so invite links work immediately without a restart.
+      let tunnelUrl: string | null = null;
+      if (config.mode === "host" && ensureTunnel) {
+        tunnelUrl = await ensureTunnel();
+      }
+      res.json({ success: true, config, tunnelUrl });
     } catch (error) {
       res.status(500).json({ success: false, error: "Failed to save config" });
     }

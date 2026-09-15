@@ -316,10 +316,41 @@ async function saveConfig() {
 
 function copyInviteLink() {
   const input = document.getElementById('invite-link');
-  if (input.value) {
-    navigator.clipboard.writeText(input.value);
-    showToast('success', 'Copied', 'Invite link copied to clipboard');
+  if (!input.value) {
+    showToast('warning', 'Empty', 'Generate a link first');
+    return;
   }
+  copyTextToClipboard(input.value);
+}
+
+// Clipboard API only works in secure contexts (HTTPS/localhost).
+// Fallback to execCommand so Copy also works over plain HTTP (e.g. http://server-ip:31313/ui).
+function copyTextToClipboard(text) {
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(text).then(
+      () => showToast('success', 'Copied', 'Invite link copied to clipboard'),
+      () => fallbackCopy(text)
+    );
+  } else {
+    fallbackCopy(text);
+  }
+}
+
+function fallbackCopy(text) {
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.position = 'fixed';
+  ta.style.opacity = '0';
+  document.body.appendChild(ta);
+  ta.focus();
+  ta.select();
+  try {
+    document.execCommand('copy');
+    showToast('success', 'Copied', 'Invite link copied to clipboard');
+  } catch {
+    showToast('error', 'Copy failed', 'Please copy the link manually');
+  }
+  document.body.removeChild(ta);
 }
 
 // ============================================
@@ -551,10 +582,11 @@ async function createInvite() {
 
 function copyGeneratedInvite() {
   const input = document.getElementById('generated-invite');
-  if (input.value) {
-    navigator.clipboard.writeText(input.value);
-    showToast('success', 'Copied', 'Invite link copied to clipboard');
+  if (!input.value) {
+    showToast('warning', 'Empty', 'Generate a link first');
+    return;
   }
+  copyTextToClipboard(input.value);
 }
 
 // ============================================

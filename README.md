@@ -4,7 +4,7 @@
 
 # OpenCOOP
 
-![OpenCOOP](https://img.shields.io/badge/OpenCOOP-v1.6.8-blue)
+![OpenCOOP](https://img.shields.io/badge/OpenCOOP-v1.8.2-blue)
 ![License](https://img.shields.io/badge/License-Non--Commercial-blue)
 ![OpenCode](https://img.shields.io/badge/OpenCode-Plugin-purple)
 ![MCP](https://img.shields.io/badge/MCP-SSE-orange)
@@ -118,7 +118,31 @@ Then add to your `~/.config/opencode/opencode.json`:
 1. Select **HOST** mode in the web UI
 2. Choose your **project folder**
 3. Click **Generate Invite Link**
-4. **Share** the link with team members
+4. Click **Copy Link** and **share** it with team members
+
+> The invite link uses an **automatic Cloudflare Tunnel** (`https://xxx.trycloudflare.com`),
+> so team members can reach your server even behind NAT, firewall, or VPN.
+> No port forwarding, no static IP, no manual setup needed.
+
+## Automatic Cloudflare Tunnel (Zero Setup)
+
+When **HOST** mode is active, OpenCOOP automatically:
+
+1. **Downloads** the `cloudflared` binary on first run (Linux / macOS / Windows, ~30 MB, cached in `~/.cache/cloudflared/`)
+2. **Opens** a secure tunnel to `http://localhost:31313`
+3. **Uses** the public `https://xxx.trycloudflare.com` URL in all invite links
+
+You don't need to install or configure anything. Requirements:
+
+- **Node.js 18+** and **OpenCode** installed
+- **Internet access** (to download the binary once, and to keep the tunnel alive)
+- `curl` available on PATH (preinstalled on virtually all Linux/macOS systems and Windows 10+)
+
+Notes:
+
+- If the tunnel can't start (e.g. offline), invite links fall back to your local IP and a warning is logged.
+- Switching from REMOTE to HOST in the UI starts the tunnel on-demand — no restart needed.
+- Each restart gets a fresh tunnel URL; generate a new invite link after restarting the host.
 
 ### REMOTE Mode (Team Member)
 
