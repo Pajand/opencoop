@@ -4,7 +4,7 @@
 
 # اوپن‌کوپ
 
-![OpenCOOP](https://img.shields.io/badge/OpenCOOP-v1.8.2-blue)
+![OpenCOOP](https://img.shields.io/badge/OpenCOOP-v1.8.3-blue)
 ![License](https://img.shields.io/badge/License-Non--Commercial-blue)
 ![OpenCode](https://img.shields.io/badge/OpenCode-Plugin-purple)
 ![MCP](https://img.shields.io/badge/MCP-SSE-orange)
@@ -304,6 +304,15 @@ curl -s -o /dev/null -w '%{http_code} %{content_type}\n' --max-time 3 -H 'Accept
 2. بررسی سرور: `curl http://localhost:31313/health` باید `{"status":"ok",...}` برگرداند.
 3. بررسی SSE: `curl -N -H 'Accept: text/event-stream' http://localhost:31313/sse` باید `event: endpoint` چاپ کند (نه HTML).
 4. مطمئن شوید آدرس `url` در تنظیمات ام‌سی‌پی با `/sse` تمام می‌شود (نه `/mcp`).
+
+### لینک دعوت IP محلی می‌دهد به‌جای آدرس تونل
+
+پنل HOST یک نشانگر زنده وضعیت تونل دارد. اول آن را ببینید:
+
+1. **بعد از نصب/آپدیت، اوپن‌کد را کامل ری‌استارت کنید** — کد پلاگین فقط موقع بالا آمدن لود می‌شود. (دیدن دکمه‌های جدید ولی لینک قدیمی یعنی کد قدیمی هنوز در حافظه است.)
+2. **در اولین اجرا ~۳۰ ثانیه صبر کنید** — باینری `cloudflared` (حدود ۳۰ مگ) یک‌بار دانلود می‌شود و تونل چند ثانیه زمان می‌برد. نشانگر تا آن موقع «در حال روشن شدن...» است.
+3. **حالت باید HOST و ذخیره‌شده باشد** — بعد از انتخاب HOST دکمه Save را بزنید؛ تونل در لحظه روشن می‌شود.
+4. **نشانگر را ببینید**: سبز = لینک‌ها با تونل‌اند؛ قرمز = علت دقیق خطا را نشان می‌دهد (قطعی اینترنت، بلاک بودن دانلود و...). بررسی دستی: `curl http://localhost:31313/tunnel-url`.
 
 ### ابزارها خطا می‌دهند
 رابط وب (`http://localhost:31313/ui`) را باز کنید، حالت HOST یا REMOTE را انتخاب و پوشه پروژه را تنظیم کنید. ابزارها قبل از پیکربندی فضای کاری نمی‌توانند فایل بخوانند/بنویسند.

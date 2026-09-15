@@ -4,7 +4,7 @@
 
 # OpenCOOP
 
-![OpenCOOP](https://img.shields.io/badge/OpenCOOP-v1.8.2-blue)
+![OpenCOOP](https://img.shields.io/badge/OpenCOOP-v1.8.3-blue)
 ![License](https://img.shields.io/badge/License-Non--Commercial-blue)
 ![OpenCode](https://img.shields.io/badge/OpenCode-Plugin-purple)
 ![MCP](https://img.shields.io/badge/MCP-SSE-orange)
@@ -334,6 +334,15 @@ This means OpenCode loads the plugin module but the HTTP server fails to start. 
 2. Verify the server is up: `curl http://localhost:31313/health` should return `{"status":"ok",...}`.
 3. Verify SSE works: `curl -N -H 'Accept: text/event-stream' http://localhost:31313/sse` should print `event: endpoint` (not HTML).
 4. Make sure your MCP `url` ends with `/sse` (not `/mcp`).
+
+### Invite link shows local IP instead of tunnel URL
+
+The HOST panel shows a live tunnel status badge. Check it first:
+
+1. **Fully restart OpenCode after install/update** — the plugin code loads only at startup. (Seeing new UI buttons but getting old-style links means the old code is still running in memory.)
+2. **Wait ~30s on first run** — the `cloudflared` binary (~30 MB) downloads once, then the tunnel needs a few seconds. The badge shows "starting..." meanwhile.
+3. **Mode must be HOST and saved** — click Save after selecting HOST; the tunnel starts on-demand.
+4. **Check the badge**: green = links use the tunnel; red = shows the exact error (no internet, download blocked, etc.). Check tunnel state manually: `curl http://localhost:31313/tunnel-url`.
 
 ### Tools fail or return errors
 Open the web UI (`http://localhost:31313/ui`), select HOST or REMOTE mode and configure your project folder. Tools need a configured workspace before they can read/write files.

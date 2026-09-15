@@ -205,10 +205,47 @@ function selectMode(mode) {
   document.getElementById('host-config').classList.toggle('hidden', mode !== 'host');
   document.getElementById('remote-config').classList.toggle('hidden', mode !== 'remote');
 
+  if (mode === 'host') loadTunnelStatus();
+
   document.getElementById('saveBar').classList.remove('hidden');
 }
 
+// Poll /tunnel-url (same origin, server root) and render the HOST tunnel badge:
+// green = active (invite links use it), amber = starting, red = failed, gray = idle.
+async function loadTunnelStatus() {
+  const badge = document.getElementById('tunnel-status');
+  const text = document.getElementById('tunnel-text');
+  if (!badge || !text) return;
+  try {
+    const res = await fetch('/tunnel-url');
+    if (!res.ok) throw new Error('no endpoint');
+    const data = await res.json();
+    if (data.url) {
+      badge.className = 'tunnel-status active';
+      text.textContent = `Tunnel active: ${data.url}`;
+    } else if (data.starting) {
+      badge.className = 'tunnel-status starting';
+      text.textContent = 'Tunnel starting... (first run downloads ~30 MB, please wait)';
+    } else if (data.error) {
+      badge.className = 'tunnel-status failed';
+      text.textContent = `Tunnel failed: ${data.error} — invite links use local IP`;
+    } else {
+      badge.className = 'tunnel-status idle';
+      text.textContent = 'Tunnel off — save HOST mode to start it';
+    }
+  } catch {
+    badge.className = 'tunnel-status idle';
+    text.textContent = 'Tunnel status unavailable';
+  }
+}
+
+setInterval(() => {
+  const panel = document.getElementById('host-config');
+  if (panel && !panel.classList.contains('hidden')) loadTunnelStatus();
+}, 5000);
+
 async function generateInvite() {
+
   try {
     const res = await fetch(`${API}/api/invite`, {
       method: 'POST',
@@ -306,6 +343,10 @@ async function saveConfig() {
     if (data.success) {
       showToast('success', 'Saved', 'Configuration saved successfully');
       document.getElementById('saveBar').classList.add('hidden');
+      if (config.mode === 'host') {
+        // Tunnel may have just started on-demand — refresh the badge.
+        setTimeout(loadTunnelStatus, 2000);
+      }
     } else {
       showToast('error', 'Error', 'Failed to save configuration');
     }

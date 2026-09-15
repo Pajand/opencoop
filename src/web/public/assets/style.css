@@ -1225,6 +1225,67 @@ input, select, textarea {
   transform: translateY(0);
 }
 
+.tunnel-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  margin-bottom: 16px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-glass);
+  color: var(--text-secondary);
+  word-break: break-all;
+}
+
+.tunnel-dot {
+  flex-shrink: 0;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--text-tertiary);
+}
+
+.tunnel-status.active {
+  border-color: rgba(16, 185, 129, 0.4);
+  background: rgba(16, 185, 129, 0.08);
+  color: var(--text-primary);
+}
+
+.tunnel-status.active .tunnel-dot {
+  background: var(--accent-success);
+  box-shadow: 0 0 10px rgba(16, 185, 129, 0.8);
+}
+
+.tunnel-status.starting {
+  border-color: rgba(245, 158, 11, 0.4);
+  background: rgba(245, 158, 11, 0.08);
+  color: var(--text-primary);
+}
+
+.tunnel-status.starting .tunnel-dot {
+  background: var(--accent-warning);
+  box-shadow: 0 0 10px rgba(245, 158, 11, 0.8);
+  animation: pulse-dot 1.2s ease-in-out infinite;
+}
+
+.tunnel-status.failed {
+  border-color: rgba(239, 68, 68, 0.4);
+  background: rgba(239, 68, 68, 0.08);
+  color: var(--text-primary);
+}
+
+.tunnel-status.failed .tunnel-dot {
+  background: var(--accent-danger);
+  box-shadow: 0 0 10px rgba(239, 68, 68, 0.8);
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.8); }
+}
+
 .btn-ghost {
   color: var(--text-secondary);
 }

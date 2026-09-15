@@ -9,6 +9,11 @@ export class TunnelManager extends EventEmitter {
   private process: ChildProcess | null = null;
   private publicUrl: string | null = null;
   private starting = false;
+  private lastError: string | null = null;
+
+  getStatus(): { url: string | null; starting: boolean; error: string | null } {
+    return { url: this.publicUrl, starting: this.starting, error: this.lastError };
+  }
 
   private async ensureBinary(): Promise<string> {
     // 1. Try require("cloudflared")
@@ -71,6 +76,7 @@ export class TunnelManager extends EventEmitter {
       });
     }
     this.starting = true;
+    this.lastError = null;
 
     const binaryPath = await this.ensureBinary();
 
@@ -102,12 +108,14 @@ export class TunnelManager extends EventEmitter {
 
       this.process.on("error", (err) => {
         this.starting = false;
+        this.lastError = err.message;
         console.log("[OpenCOOP] Cloudflare tunnel error:", err.message);
         reject(err);
       });
 
       this.process.on("exit", (code) => {
         this.starting = false;
+        if (!urlFound) this.lastError = `tunnel exited with code ${code}`;
         this.publicUrl = null;
         this.process = null;
         console.log(`[OpenCOOP] Cloudflare tunnel exited with code ${code}`);
@@ -116,6 +124,7 @@ export class TunnelManager extends EventEmitter {
       setTimeout(() => {
         if (!urlFound) {
           this.starting = false;
+          this.lastError = "Tunnel startup timeout (no URL after 30s)";
           reject(new Error("Tunnel startup timeout"));
         }
       }, 30000);

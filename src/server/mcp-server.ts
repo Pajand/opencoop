@@ -524,7 +524,8 @@ export class OpenCOOPServer {
     });
 
     app.get("/tunnel-url", (req, res) => {
-      res.json({ url: this.tunnelManager?.getUrl() || null });
+      // Extra fields are backward compatible: old clients only read `url`.
+      res.json({ url: this.tunnelManager?.getUrl() || null, ...(this.tunnelManager?.getStatus() || { starting: false, error: null }) });
     });
 
     // SSE endpoint - OpenCode connects here when url ends with /sse
