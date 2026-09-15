@@ -4,7 +4,7 @@
 
 # اوپن‌کوپ
 
-![OpenCOOP](https://img.shields.io/badge/OpenCOOP-v1.10.1-blue)
+![OpenCOOP](https://img.shields.io/badge/OpenCOOP-v1.10.2-blue)
 ![License](https://img.shields.io/badge/License-Non--Commercial-blue)
 ![OpenCode](https://img.shields.io/badge/OpenCode-Plugin-purple)
 ![MCP](https://img.shields.io/badge/MCP-SSE-orange)
