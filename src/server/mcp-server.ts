@@ -815,21 +815,22 @@ export class OpenCOOPServer {
     app.use("/ui", webApp);
     app.get("/", (_req, res) => res.redirect("/ui/"));
 
-    // Start Cloudflare Tunnel for HOST mode
-    if (this.config.mode === "host") {
-      this.tunnelManager = new TunnelManager();
-      try {
-        const tunnelUrl = await this.tunnelManager.start();
-        console.log(`[OpenCOOP] Cloudflare tunnel active: ${tunnelUrl}`);
-      } catch (err) {
-        console.log("[OpenCOOP] Tunnel failed:", (err as Error).message);
-        console.log("[OpenCOOP] Invite links will use local IP (may not work with VPN)");
-      }
-    }
-
     return new Promise((resolve, reject) => {
-      this.httpServer = app.listen(port, '0.0.0.0', () => {
+      this.httpServer = app.listen(port, '0.0.0.0', async () => {
         logger.info(`OpenCOOP server listening on 0.0.0.0:${port}`);
+
+        // Start Cloudflare Tunnel AFTER server is listening
+        if (this.config.mode === "host") {
+          this.tunnelManager = new TunnelManager();
+          try {
+            const tunnelUrl = await this.tunnelManager.start();
+            console.log(`[OpenCOOP] Cloudflare tunnel active: ${tunnelUrl}`);
+          } catch (err) {
+            console.log("[OpenCOOP] Tunnel failed:", (err as Error).message);
+            console.log("[OpenCOOP] Invite links will use local IP (may not work with VPN)");
+          }
+        }
+
         resolve();
       });
       this.httpServer.on("error", (err: any) => {
