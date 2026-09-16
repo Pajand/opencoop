@@ -253,7 +253,7 @@ export async function createWebUI(
       mode: config.mode,
       workspace: config.workspacePath,
       port: config.port,
-      version: "1.13.1",
+      version: "1.13.3",
       uptime: process.uptime(),
     });
   });

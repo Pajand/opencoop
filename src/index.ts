@@ -101,7 +101,7 @@ const plugin: PluginModule = {
             startLine: args.start_line,
             endLine: args.end_line,
           });
-          await changeTracker.logChange({ workspaceId: workspacePath, filePath: args.path, userId: uid, action: "read" });
+          await changeTracker.logChange({ workspaceId: workspacePath, filePath: args.path, userId: uid, userName: (args._opencoop_user as string) || config.userName || uid, action: "read" });
           return content;
         }
       );
@@ -112,7 +112,7 @@ const plugin: PluginModule = {
         async (args: any, _ctx: any) => {
           const uid = userId();
           await fileManager.writeFile(args.path, args.content, { createDirs: args.create_dirs });
-          await changeTracker.logChange({ workspaceId: workspacePath, filePath: args.path, userId: uid, action: "update", newContentHash: await fileManager.hash(args.path) });
+          await changeTracker.logChange({ workspaceId: workspacePath, filePath: args.path, userId: uid, userName: (args._opencoop_user as string) || config.userName || uid, action: "update", newContentHash: await fileManager.hash(args.path) });
           return `File written successfully: ${args.path}`;
         }
       );
@@ -125,7 +125,7 @@ const plugin: PluginModule = {
           const oldHash = await fileManager.hash(args.path);
           const result = await fileManager.editFile(args.path, args.search, args.replace, { replaceAll: args.replace_all });
           const newHash = await fileManager.hash(args.path);
-          await changeTracker.logChange({ workspaceId: workspacePath, filePath: args.path, userId: uid, action: "update", oldContentHash: oldHash, newContentHash: newHash, metadata: JSON.stringify({ changes: result.changes }) });
+          await changeTracker.logChange({ workspaceId: workspacePath, filePath: args.path, userId: uid, userName: (args._opencoop_user as string) || config.userName || uid, action: "update", oldContentHash: oldHash, newContentHash: newHash, metadata: JSON.stringify({ changes: result.changes }) });
           return `Edit applied: ${result.changes} occurrence(s) replaced in ${args.path}`;
         }
       );

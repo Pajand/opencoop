@@ -158,9 +158,21 @@ export async function proxyForward(toolName: string, args: any, ownPort?: number
     return hostAdvice(target, errMsg(err));
   }
 
+  // Inject remote user's display name so the HOST can attribute the change
+  // to the correct user instead of showing the host's name.
+  let forwardArgs: Record<string, unknown> = (args ?? {}) as Record<string, unknown>;
+  try {
+    const cfg = await loadConfig();
+    if (cfg.userName) {
+      forwardArgs = { ...forwardArgs, _opencoop_user: cfg.userName };
+    }
+  } catch {
+    // If config can't be read, forward without user attribution.
+  }
+
   try {
     const result: any = await withTimeout(
-      client.callTool({ name: toolName, arguments: (args ?? {}) as Record<string, unknown> }),
+      client.callTool({ name: toolName, arguments: forwardArgs }),
       CALL_TIMEOUT_MS,
       `Host tool '${toolName}'`
     );

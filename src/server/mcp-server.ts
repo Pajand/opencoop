@@ -116,19 +116,20 @@ export class OpenCOOPServer {
     const px = await proxyForward(name, args, this.config.port);
     if (px !== null) return px;
     const userId = "user-" + randomUUID().slice(0, 8);
+    const userName = this.resolveUserName(args, userId);
     try {
       switch (name) {
         case "read_file":
           return await this.fileManager.readFile(args.path, { startLine: args.start_line, endLine: args.end_line });
         case "write_file":
           await this.fileManager.writeFile(args.path, args.content, { createDirs: args.create_dirs });
-          await this.changeTracker.logChange({ workspaceId: this.config.workspacePath, filePath: args.path, userId, userName: this.config.userName || userId, action: "update", newContentHash: await this.fileManager.hash(args.path) });
+          await this.changeTracker.logChange({ workspaceId: this.config.workspacePath, filePath: args.path, userId, userName, action: "update", newContentHash: await this.fileManager.hash(args.path) });
           return `File written successfully: ${args.path}`;
         case "edit_file": {
           const oldHash = await this.fileManager.hash(args.path);
           const result = await this.fileManager.editFile(args.path, args.search, args.replace, { replaceAll: args.replace_all });
           const newHash = await this.fileManager.hash(args.path);
-          await this.changeTracker.logChange({ workspaceId: this.config.workspacePath, filePath: args.path, userId, userName: this.config.userName || userId, action: "update", oldContentHash: oldHash, newContentHash: newHash, metadata: JSON.stringify({ changes: result.changes }) });
+          await this.changeTracker.logChange({ workspaceId: this.config.workspacePath, filePath: args.path, userId, userName, action: "update", oldContentHash: oldHash, newContentHash: newHash, metadata: JSON.stringify({ changes: result.changes }) });
           return `Edit applied: ${result.changes} occurrence(s) replaced in ${args.path}`;
         }
         case "list_files":
@@ -184,10 +185,11 @@ export class OpenCOOPServer {
         path: z.string().describe("Relative file path from project root"),
         start_line: z.number().optional().describe("Start line number (1-based)"),
         end_line: z.number().optional().describe("End line number (1-based)"),
+        _opencoop_user: z.string().optional().describe("Remote user's display name (injected by proxy)"),
       },
-      async ({ path, start_line, end_line }) => {
+      async ({ path, start_line, end_line, _opencoop_user }) => {
         const userId = "user-" + randomUUID().slice(0, 8);
-        const userName = this.config.userName || userId;
+        const userName = this.resolveUserName({ _opencoop_user }, userId);
         const content = await this.fileManager.readFile(path, {
           startLine: start_line,
           endLine: end_line,
@@ -212,10 +214,11 @@ export class OpenCOOPServer {
         path: z.string().describe("Relative file path from project root"),
         content: z.string().describe("Full file content to write"),
         create_dirs: z.boolean().optional().describe("Create parent directories if they do not exist"),
+        _opencoop_user: z.string().optional().describe("Remote user's display name (injected by proxy)"),
       },
-      async ({ path, content, create_dirs }) => {
+      async ({ path, content, create_dirs, _opencoop_user }) => {
         const userId = "user-" + randomUUID().slice(0, 8);
-        const userName = this.config.userName || userId;
+        const userName = this.resolveUserName({ _opencoop_user }, userId);
         let oldContent = "";
         try { oldContent = await this.fileManager.readFile(path); } catch {}
         await this.fileManager.writeFile(path, content, { createDirs: create_dirs });
@@ -244,10 +247,11 @@ export class OpenCOOPServer {
         search: z.string().describe("Exact text to find (must be unique in file)"),
         replace: z.string().describe("Text to replace with"),
         replace_all: z.boolean().optional().describe("Replace all occurrences (default: false)"),
+        _opencoop_user: z.string().optional().describe("Remote user's display name (injected by proxy)"),
       },
-      async ({ path, search, replace, replace_all }) => {
+      async ({ path, search, replace, replace_all, _opencoop_user }) => {
         const userId = "user-" + randomUUID().slice(0, 8);
-        const userName = this.config.userName || userId;
+        const userName = this.resolveUserName({ _opencoop_user }, userId);
         const oldContent = await this.fileManager.readFile(path);
         const oldHash = await this.fileManager.hash(path);
         const result = await this.fileManager.editFile(path, search, replace, {
@@ -354,10 +358,11 @@ export class OpenCOOPServer {
       {
         path: z.string().describe("File path to lock"),
         reason: z.string().optional().describe("Brief description of what you plan to do"),
+        _opencoop_user: z.string().optional().describe("Remote user's display name (injected by proxy)"),
       },
-      async ({ path, reason }) => {
+      async ({ path, reason, _opencoop_user }) => {
         const userId = "user-" + randomUUID().slice(0, 8);
-        const userName = this.config.userName || userId;
+        const userName = this.resolveUserName({ _opencoop_user }, userId);
         const sessionId = randomUUID();
 
         const result = await this.lockManager.acquireLock({
@@ -542,6 +547,19 @@ export class OpenCOOPServer {
         };
       }
     );
+  }
+
+  /**
+   * Resolve the effective user name for a tool call.
+   * Priority: 1) _opencoop_user injected by REMOTE proxy (actual remote user),
+   * 2) this.config.userName (host's own name), 3) fallback userId.
+   */
+  private resolveUserName(args: any, fallbackId: string): string {
+    const remoteUser = args?._opencoop_user;
+    if (typeof remoteUser === "string" && remoteUser.trim()) {
+      return remoteUser.trim();
+    }
+    return this.config.userName || fallbackId;
   }
 
   private computeDiff(oldText: string, newText: string): Array<{ type: 'added' | 'removed' | 'unchanged'; line: string }> | null {

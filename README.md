@@ -4,7 +4,7 @@
 
 # OpenCOOP
 
-![Version](https://img.shields.io/badge/version-1.13.1-blue)
+![Version](https://img.shields.io/badge/version-1.13.3-blue)
 ![License](https://img.shields.io/badge/license-Non--Commercial-green)
 ![OpenCode](https://img.shields.io/badge/OpenCode-Plugin-purple)
 ![MCP](https://img.shields.io/badge/MCP-SSE-orange)
@@ -21,31 +21,61 @@
 
 ## What is OpenCOOP?
 
-OpenCOOP is an **OpenCode plugin** that enables real-time collaboration between multiple developers on the same project. Each developer runs their own OpenCode instance with their own AI, but they all connect to a **shared MCP server** — giving every person's AI direct read/write access to a common project folder.
+**Turn any device into a shared coding server. Your whole team codes together on ONE project — from anywhere in the world.**
 
-**Up to 50 developers** can work simultaneously on the same codebase with full file locking, change tracking, and conflict prevention.
+OpenCOOP is an **OpenCode plugin** that lets multiple developers (each with their own AI assistant) work simultaneously on the **same project folder** hosted on **one machine**.
+
+### How It Works (Simple!)
 
 ```
-┌─────────────────────┐     ┌─────────────────────┐
-│  Developer A (AI)   │     │  Developer B (AI)   │
-│  OpenCode + MCP     │     │  OpenCode + MCP     │
-└──────────┬──────────┘     └──────────┬──────────┘
-           │                           │
-           └─────────────┬─────────────┘
-                         │
-                         ▼
-          ┌──────────────────────────┐
-          │   OpenCOOP MCP Server    │
-          │   Port 31313 • SSE       │
-          │   File Locking • Logs    │
-          └────────────┬─────────────┘
-                       │
-                       ▼
-          ┌──────────────────────────┐
-          │    Shared Project Folder │
-          │    (Secure Sandbox)      │
-          └──────────────────────────┘
+  YOUR LAPTOP (HOST)                    TEAMMATE'S LAPTOP (REMOTE)
+  ┌──────────────────┐                  ┌──────────────────┐
+  │  Your Project    │                  │  Teammate's      │
+  │  /home/you/app   │◄──── INTERNET ───│  OpenCode + AI   │
+  │                  │   (via tunnel)   │                  │
+  │  OpenCOOP Server │                  │  OpenCOOP Plugin │
+  │  Port 31313      │                  │  (proxies to you)│
+  └──────────────────┘                  └──────────────────┘
+        ▲                                        │
+        │                                        ▼
+        │                               Teammate's AI reads/writes
+        │                               YOUR files in real-time!
+        │
+  Every change is LOGGED:
+  ✅ Who changed what file
+  ✅ Full diff (red/green view)
+  ✅ Timestamp
 ```
+
+### Real-World Example
+
+1. **You** have a project on your laptop at `/home/you/my-app`
+2. You open OpenCOOP web UI → select **HOST** → pick your folder → click **Generate Invite Link**
+3. You send the link to your teammate (e.g., `https://abc123.tinyfi.sh/ui/invite/xyz`)
+4. **Teammate** installs the plugin, pastes your link, clicks **Connect**
+5. Now teammate's AI can **read, write, and edit YOUR project files** as if they were local!
+6. You both see every change in the **Changes** page with **who made it** and a **visual diff**
+
+**No Git push/pull. No screen sharing. No "send me the file". Just code together live.**
+
+### Key Concepts
+
+| Concept | Explanation |
+|---------|-------------|
+| **HOST** | The one device that holds the real project files. Shares them over the internet via a secure tunnel. |
+| **REMOTE** | Any other device that connects to the host. Their AI works on the host's files as if local. |
+| **Invite Link** | A secure URL the host generates. Contains the tunnel address + access token. Share it with teammates. |
+| **Change Tracking** | Every file read/write/edit is logged with the user's name, timestamp, and full diff. |
+| **File Locking** | Prevent two people from editing the same file at the same time (avoids conflicts). |
+
+### Coming Soon 🚀
+
+- **Admin Dashboard**: Manage team members, permissions, and access
+- **Snapshots**: Admin can take point-in-time snapshots of the entire project
+- **Rollback**: One-click restore to any previous snapshot if something breaks
+- **Conflict Resolution**: Smart merge when two users edit the same lines
+
+**Up to 50 developers** can collaborate simultaneously with full audit trails.
 
 ## Features
 
@@ -281,7 +311,7 @@ curl -s -o /dev/null -w '%{http_code} %{content_type}\n' --max-time 3 -H 'Accept
 
 ### Plugin recognized by OpenCode but UI not loading / MCP not starting
 
-1. **Plugin version too old**: Must be `1.13.1` or newer. Check with `npm ls -g @opencoop/opencode-plugin`.
+1. **Plugin version too old**: Must be `1.13.3` or newer. Check with `npm ls -g @opencoop/opencode-plugin`.
 2. **Stale plugin cache**: Clear and restart:
    ```bash
    rm -rf ~/.cache/opencode/packages/@opencoop
