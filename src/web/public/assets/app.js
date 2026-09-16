@@ -5,6 +5,7 @@
 const API = '/ui';
 let currentPage = 'config';
 let currentConfig = { mode: null, workspacePath: '' };
+let userName = localStorage.getItem('opencoop-user-name') || '';
 
 // ============================================
 // Initialization
@@ -16,6 +17,11 @@ document.addEventListener('DOMContentLoaded', () => {
   initMenuToggle();
   checkStatus();
   loadConfig();
+
+  // Check if user name is set
+  if (!userName) {
+    showNameModal();
+  }
 
   // Auto-refresh status
   setInterval(checkStatus, 10000);
@@ -190,6 +196,13 @@ async function loadConfig() {
     if (data.hostUrl) {
       document.getElementById('host-url').value = data.hostUrl;
     }
+    // Sync userName from server
+    if (data.userName) {
+      userName = data.userName;
+      localStorage.setItem('opencoop-user-name', data.userName);
+      const nameInput = document.getElementById('user-name-input');
+      if (nameInput) nameInput.value = data.userName;
+    }
   } catch {
     // Use defaults
   }
@@ -354,6 +367,41 @@ async function saveConfig() {
   }
 }
 
+async function updateUserName() {
+  const input = document.getElementById('user-name-input');
+  const name = input.value.trim();
+
+  if (!name) {
+    showToast('warning', 'Empty', 'Please enter a name');
+    return;
+  }
+
+  try {
+    const res = await fetch(`${API}/api/config`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userName: name }),
+    });
+    const data = await res.json();
+
+    if (data.success) {
+      userName = name;
+      localStorage.setItem('opencoop-user-name', name);
+      // Register in user sessions map
+      fetch(`${API}/api/user/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userName: name }),
+      }).catch(() => {});
+      showToast('success', 'Name Updated', `Display name changed to "${name}"`);
+    } else {
+      showToast('error', 'Error', 'Failed to update name');
+    }
+  } catch {
+    showToast('error', 'Error', 'Failed to update name');
+  }
+}
+
 function copyInviteLink() {
   const input = document.getElementById('invite-link');
   if (!input.value) {
@@ -419,15 +467,24 @@ async function loadDashboard() {
     if (recent.length === 0) {
       activityContainer.innerHTML = '<div class="empty-state"><p>No activity yet</p></div>';
     } else {
-      activityContainer.innerHTML = recent.map((item, i) => `
-        <div class="activity-item" style="animation-delay: ${i * 0.05}s">
-          <div class="activity-icon ${item.action}">${item.action.charAt(0).toUpperCase()}</div>
-          <div class="activity-info">
-            <div class="activity-file">${item.filePath}</div>
-            <div class="activity-meta">${item.userId} - ${formatTime(item.timestamp)}</div>
+      activityContainer.innerHTML = recent.map((item, i) => {
+        const displayName = item.userName || item.userId;
+        return `
+          <div class="activity-item" style="animation-delay: ${i * 0.05}s">
+            <div class="activity-icon ${item.action}">${item.action.charAt(0).toUpperCase()}</div>
+            <div class="activity-info">
+              <div class="activity-file">${item.filePath}</div>
+              <div class="activity-meta">
+                <span class="change-user-name">
+                  <span class="user-dot" style="background: ${getAvatarColor(displayName)}"></span>
+                  ${displayName}
+                </span>
+                — ${formatTime(item.timestamp)}
+              </div>
+            </div>
           </div>
-        </div>
-      `).join('');
+        `;
+      }).join('');
     }
 
     // Online users
@@ -496,7 +553,12 @@ function animateValue(elementId, end) {
 // Changes Page
 // ============================================
 
-async function loadChanges() {
+let changesPage = 0;
+const CHANGES_PER_PAGE = 20;
+let changesTotal = 0;
+
+async function loadChanges(page) {
+  if (page !== undefined) changesPage = page;
   const filePath = document.getElementById('filter-file').value;
   const userId = document.getElementById('filter-user').value;
 
@@ -504,13 +566,15 @@ async function loadChanges() {
     const params = new URLSearchParams();
     if (filePath) params.set('file_path', filePath);
     if (userId) params.set('user_id', userId);
-    params.set('limit', '50');
+    params.set('limit', String(CHANGES_PER_PAGE));
+    params.set('offset', String(changesPage * CHANGES_PER_PAGE));
 
     const res = await fetch(`${API}/api/changes?${params}`);
     const data = await res.json();
 
     const container = document.getElementById('changes-list');
     const changes = data.changes || [];
+    changesTotal = data.total || changes.length;
 
     if (changes.length === 0) {
       container.innerHTML = `
@@ -522,14 +586,66 @@ async function loadChanges() {
         </div>
       `;
     } else {
-      container.innerHTML = changes.map((item, i) => `
-        <div class="change-item" style="animation-delay: ${i * 0.03}s">
-          <span class="change-action ${item.action}">${item.action}</span>
-          <span class="change-file">${item.filePath}</span>
-          <span class="change-user">${item.userId}</span>
-          <span class="change-time">${formatTime(item.timestamp)}</span>
-        </div>
-      `).join('');
+      let html = changes.map((item, i) => {
+        const displayName = item.userName || item.userId;
+        const hasMetadata = item.metadata && item.metadata.includes('diff');
+        return `
+          <div class="change-item ${hasMetadata ? 'clickable' : ''}" data-idx="${i}" style="animation-delay: ${i * 0.03}s">
+            <span class="change-action ${item.action}">${item.action}</span>
+            <span class="change-file">${escapeHtml(item.filePath)}</span>
+            <span class="change-user-name">
+              <span class="user-dot" style="background: ${getAvatarColor(displayName)}"></span>
+              ${escapeHtml(displayName)}
+            </span>
+            <span class="change-time">${formatTime(item.timestamp)}</span>
+            ${hasMetadata ? '<button class="diff-btn" data-diff-idx="' + i + '"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/></svg> View Diff</button>' : ''}
+          </div>
+        `;
+      }).join('');
+
+      // Pagination
+      const totalPages = Math.ceil(changesTotal / CHANGES_PER_PAGE);
+      if (totalPages > 1) {
+        html += '<div class="pagination">';
+        html += `<button class="btn btn-sm btn-ghost" onclick="loadChanges(0)" ${changesPage === 0 ? 'disabled' : ''}>&laquo; First</button>`;
+        html += `<button class="btn btn-sm btn-ghost" onclick="loadChanges(${changesPage - 1})" ${changesPage === 0 ? 'disabled' : ''}>&lsaquo; Prev</button>`;
+        for (let p = Math.max(0, changesPage - 2); p <= Math.min(totalPages - 1, changesPage + 2); p++) {
+          html += `<button class="btn btn-sm ${p === changesPage ? 'btn-primary' : 'btn-ghost'}" onclick="loadChanges(${p})">${p + 1}</button>`;
+        }
+        html += `<button class="btn btn-sm btn-ghost" onclick="loadChanges(${changesPage + 1})" ${changesPage >= totalPages - 1 ? 'disabled' : ''}>Next &rsaquo;</button>`;
+        html += `<button class="btn btn-sm btn-ghost" onclick="loadChanges(${totalPages - 1})" ${changesPage >= totalPages - 1 ? 'disabled' : ''}>Last &raquo;</button>`;
+        html += `<span class="pagination-info">${changesPage + 1} / ${totalPages} (${changesTotal} total)</span>`;
+        html += '</div>';
+      }
+
+      container.innerHTML = html;
+
+      // Store changes data for diff modal
+      container._changesData = changes;
+
+      // Bind diff buttons via event delegation
+      container.addEventListener('click', (e) => {
+        const diffBtn = e.target.closest('.diff-btn');
+        if (diffBtn) {
+          e.stopPropagation();
+          const idx = parseInt(diffBtn.dataset.diffIdx);
+          const item = changes[idx];
+          if (item) {
+            const displayName = item.userName || item.userId;
+            showDiffModal(item.filePath, displayName, item.metadata);
+          }
+          return;
+        }
+        const changeItem = e.target.closest('.change-item.clickable');
+        if (changeItem) {
+          const idx = parseInt(changeItem.dataset.idx);
+          const item = changes[idx];
+          if (item) {
+            const displayName = item.userName || item.userId;
+            showDiffModal(item.filePath, displayName, item.metadata);
+          }
+        }
+      });
     }
   } catch {
     showToast('error', 'Error', 'Failed to load changes');
@@ -552,16 +668,26 @@ async function loadTeam() {
     if (members.length === 0) {
       membersContainer.innerHTML = '<div class="empty-state"><p>No team members yet</p></div>';
     } else {
-      membersContainer.innerHTML = members.map((member, i) => `
-        <div class="member-item" style="animation-delay: ${i * 0.05}s">
-          <div class="user-avatar" style="background: ${getAvatarColor(member.userId || 'U')}">${(member.userId || 'U').charAt(0).toUpperCase()}</div>
-          <div class="user-info">
-            <div class="user-name">${member.email || member.userId || 'Unknown'}</div>
-            <div class="user-status">${member.role || 'member'}</div>
+      membersContainer.innerHTML = members.map((member, i) => {
+        const name = member.email || member.userId || 'Unknown';
+        const source = member.source || 'invite';
+        const roleLabel = source === 'host' ? 'Host'
+          : source === 'web' ? 'Connected'
+          : member.role || 'member';
+        const roleClass = source === 'host' ? 'host'
+          : source === 'web' ? 'connected'
+          : 'member';
+        return `
+          <div class="member-item" style="animation-delay: ${i * 0.05}s">
+            <div class="user-avatar" style="background: ${getAvatarColor(name)}">${name.charAt(0).toUpperCase()}</div>
+            <div class="user-info">
+              <div class="user-name">${escapeHtml(name)}</div>
+              <div class="user-status">${source === 'host' ? 'Workspace owner' : source === 'web' ? 'Via web UI' : 'Via invite link'}</div>
+            </div>
+            <span class="member-role ${roleClass}">${roleLabel}</span>
           </div>
-          <span class="member-role">${(member.permissions || 'read').split(',').join(' + ')}</span>
-        </div>
-      `).join('');
+        `;
+      }).join('');
     }
 
     // Online
@@ -575,7 +701,7 @@ async function loadTeam() {
         <div class="user-item" style="animation-delay: ${i * 0.05}s">
           <div class="user-avatar" style="background: ${getAvatarColor(user.userId)}">${user.userId.charAt(0).toUpperCase()}</div>
           <div class="user-info">
-            <div class="user-name">${user.userId}</div>
+            <div class="user-name">${escapeHtml(user.userId)}</div>
             <div class="user-status online">Online</div>
           </div>
         </div>
@@ -703,4 +829,116 @@ function getAvatarColor(str) {
     hash = str.charCodeAt(i) + ((hash << 5) - hash);
   }
   return colors[Math.abs(hash) % colors.length];
+}
+
+// ============================================
+// Name Modal
+// ============================================
+
+function showNameModal() {
+  document.getElementById('name-modal').classList.remove('hidden');
+  document.getElementById('name-input').focus();
+}
+
+function hideNameModal() {
+  document.getElementById('name-modal').classList.add('hidden');
+}
+
+async function saveUserName() {
+  const input = document.getElementById('name-input');
+  const name = input.value.trim();
+
+  if (!name) {
+    input.style.borderColor = 'var(--accent-danger)';
+    setTimeout(() => { input.style.borderColor = ''; }, 1500);
+    return;
+  }
+
+  userName = name;
+  localStorage.setItem('opencoop-user-name', name);
+
+  // Save to server config AND register user session
+  try {
+    await fetch(`${API}/api/config`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userName: name }),
+    });
+  } catch {}
+
+  // Also register in user sessions map for attribution
+  try {
+    await fetch(`${API}/api/user/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userName: name }),
+    });
+  } catch {}
+
+  hideNameModal();
+  showToast('success', 'Welcome', `Hello, ${name}!`);
+}
+
+// Handle Enter key in name input
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    const nameModal = document.getElementById('name-modal');
+    if (nameModal && !nameModal.classList.contains('hidden')) {
+      saveUserName();
+    }
+    const diffModal = document.getElementById('diff-modal');
+    if (diffModal && !diffModal.classList.contains('hidden')) {
+      closeDiffModal();
+    }
+  }
+  if (e.key === 'Escape') {
+    const diffModal = document.getElementById('diff-modal');
+    if (diffModal && !diffModal.classList.contains('hidden')) {
+      closeDiffModal();
+    }
+  }
+});
+
+// ============================================
+// Diff Viewer
+// ============================================
+
+function showDiffModal(filePath, userName, metadata) {
+  const modal = document.getElementById('diff-modal');
+  const title = document.getElementById('diff-title');
+  const subtitle = document.getElementById('diff-subtitle');
+  const content = document.getElementById('diff-content');
+
+  title.textContent = filePath;
+  subtitle.textContent = userName ? `by ${userName}` : '';
+
+  let diff = null;
+  try {
+    const meta = JSON.parse(metadata);
+    diff = meta.diff;
+  } catch {}
+
+  if (!diff || diff.length === 0) {
+    content.innerHTML = '<div class="diff-empty">No diff available for this change</div>';
+  } else {
+    content.innerHTML = diff.map((line, i) => {
+      const prefix = line.type === 'added' ? '+' : line.type === 'removed' ? '-' : ' ';
+      return `<div class="diff-line ${line.type}">
+        <span class="diff-line-num">${i + 1}</span>
+        <span class="diff-line-content">${prefix} ${escapeHtml(line.line)}</span>
+      </div>`;
+    }).join('');
+  }
+
+  modal.classList.remove('hidden');
+}
+
+function closeDiffModal() {
+  document.getElementById('diff-modal').classList.add('hidden');
+}
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
 }

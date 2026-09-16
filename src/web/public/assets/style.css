@@ -1127,6 +1127,16 @@ input, select, textarea {
   color: var(--accent-primary);
 }
 
+.member-role.host {
+  background: rgba(16, 185, 129, 0.15);
+  color: var(--accent-success);
+}
+
+.member-role.connected {
+  background: rgba(6, 182, 212, 0.15);
+  color: var(--accent-secondary);
+}
+
 /* ============================================
    Empty State
    ============================================ */
@@ -1561,4 +1571,294 @@ tr:hover td {
 .member-list::-webkit-scrollbar-thumb {
   background: var(--border-color);
   border-radius: 2px;
+}
+
+/* ============================================
+   Modal Overlay
+   ============================================ */
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  animation: fadeIn 0.2s ease;
+}
+
+.modal-overlay.hidden {
+  display: none;
+}
+
+.modal {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-xl);
+  padding: 2.5rem;
+  width: 90%;
+  max-width: 440px;
+  box-shadow: var(--shadow-lg), var(--shadow-glow);
+  animation: modalSlideIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.modal-lg {
+  max-width: 800px;
+}
+
+@keyframes modalSlideIn {
+  from { opacity: 0; transform: translateY(20px) scale(0.95); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.modal-header {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+.modal-icon {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: var(--gradient-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 1rem;
+  color: white;
+}
+
+.modal-icon.diff-icon {
+  background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+}
+
+.modal-header h2 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+  color: var(--text-primary);
+}
+
+.modal-header p {
+  color: var(--text-secondary);
+  font-size: 0.95rem;
+}
+
+.modal-body {
+  margin-bottom: 1.5rem;
+}
+
+.modal-input {
+  width: 100%;
+  padding: 0.875rem 1rem;
+  background: var(--bg-tertiary);
+  border: 2px solid var(--border-color);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  font-size: 1rem;
+  font-family: inherit;
+  outline: none;
+  transition: border-color var(--transition-fast);
+}
+
+.modal-input:focus {
+  border-color: var(--accent-primary);
+}
+
+.modal-input::placeholder {
+  color: var(--text-tertiary);
+}
+
+.modal-footer {
+  display: flex;
+  justify-content: center;
+}
+
+.btn-lg {
+  padding: 0.875rem 2rem;
+  font-size: 1rem;
+}
+
+/* ============================================
+   Diff Viewer
+   ============================================ */
+
+.diff-container {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  max-height: 50vh;
+  overflow-y: auto;
+}
+
+.diff-line {
+  display: flex;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.85rem;
+  line-height: 1.6;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+}
+
+.diff-line:last-child {
+  border-bottom: none;
+}
+
+.diff-line-num {
+  width: 50px;
+  min-width: 50px;
+  padding: 0 0.5rem;
+  text-align: right;
+  color: var(--text-tertiary);
+  user-select: none;
+  font-size: 0.8rem;
+  border-right: 1px solid var(--border-color);
+}
+
+.diff-line-content {
+  flex: 1;
+  padding: 0 1rem;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.diff-line.added {
+  background: rgba(16, 185, 129, 0.12);
+}
+
+.diff-line.added .diff-line-num {
+  background: rgba(16, 185, 129, 0.2);
+  color: #10b981;
+}
+
+.diff-line.added .diff-line-content {
+  color: #34d399;
+}
+
+.diff-line.removed {
+  background: rgba(239, 68, 68, 0.12);
+}
+
+.diff-line.removed .diff-line-num {
+  background: rgba(239, 68, 68, 0.2);
+  color: #ef4444;
+}
+
+.diff-line.removed .diff-line-content {
+  color: #f87171;
+}
+
+.diff-line.unchanged {
+  background: transparent;
+}
+
+.diff-line.unchanged .diff-line-content {
+  color: var(--text-secondary);
+}
+
+.diff-empty {
+  padding: 2rem;
+  text-align: center;
+  color: var(--text-tertiary);
+  font-style: italic;
+}
+
+/* ============================================
+   Change Item Clickable
+   ============================================ */
+
+.change-item {
+  transition: background var(--transition-fast);
+}
+
+.change-item.clickable {
+  cursor: pointer;
+  position: relative;
+}
+
+.change-item.clickable:hover {
+  background: var(--bg-hover);
+}
+
+.diff-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  background: rgba(139, 92, 246, 0.15);
+  color: var(--accent-primary);
+  cursor: pointer;
+  border: none;
+  transition: all var(--transition-fast);
+  flex-shrink: 0;
+}
+
+.diff-btn:hover {
+  background: rgba(139, 92, 246, 0.25);
+  transform: translateY(-1px);
+}
+
+/* ============================================
+   Pagination
+   ============================================ */
+
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 16px 20px;
+  border-top: 1px solid var(--border-color);
+  flex-wrap: wrap;
+}
+
+.pagination .btn {
+  min-width: 36px;
+  justify-content: center;
+  padding: 6px 10px;
+  font-size: 0.8rem;
+}
+
+.pagination .btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.pagination-info {
+  font-size: 0.8rem;
+  color: var(--text-tertiary);
+  margin-left: 12px;
+}
+
+/* ============================================
+   User Name Badge
+   ============================================ */
+
+.change-user-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.25rem 0.625rem;
+  background: var(--bg-tertiary);
+  border-radius: 20px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.change-user-name .user-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent-primary);
 }

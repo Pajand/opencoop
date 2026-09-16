@@ -11,6 +11,18 @@ import { initDatabase, getAllRows, getRow } from "../utils/database.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
+// In-memory map: IP -> { userName, lastSeen }
+// Tracks remote users who connected via the web UI.
+// Used to attribute MCP tool changes to the correct user.
+const userSessions = new Map<string, { userName: string; lastSeen: number }>();
+
+export function getActiveUserName(clientIp: string | undefined): string | undefined {
+  if (!clientIp) return undefined;
+  const ip = clientIp.replace(/^::ffff:/, "");
+  const session = userSessions.get(ip);
+  return session?.userName;
+}
+
 export async function createWebUI(
   config: ServerConfig,
   getTunnelUrl?: () => string | null,
@@ -25,6 +37,30 @@ export async function createWebUI(
   const sessionManager = new SessionManager();
   const lockManager = new LockManager();
 
+  // ==================== USER SESSION TRACKING ====================
+  // When a remote user sets their display name, register their IP.
+  // This allows MCP tools to attribute changes to the correct user.
+  app.post("/api/user/register", (req, res) => {
+    try {
+      const { userName } = req.body;
+      if (!userName) return res.status(400).json({ error: "userName required" });
+      const rawIp = req.ip || req.socket.remoteAddress || "unknown";
+      const ip = rawIp.replace(/^::ffff:/, "");
+      userSessions.set(ip, { userName, lastSeen: Date.now() });
+      res.json({ success: true, ip });
+    } catch {
+      res.status(500).json({ error: "Failed to register user" });
+    }
+  });
+
+  app.get("/api/user/sessions", (_req, res) => {
+    const sessions = Array.from(userSessions.entries()).map(([ip, data]) => ({
+      ip,
+      ...data,
+    }));
+    res.json({ sessions });
+  });
+
   // ==================== CONFIG API ====================
   app.get("/api/config", (req, res) => {
     res.json({
@@ -32,21 +68,29 @@ export async function createWebUI(
       workspacePath: config.workspacePath,
       hostUrl: config.hostUrl,
       port: config.port,
+      userName: config.userName || "",
     });
   });
 
   app.post("/api/config", async (req, res) => {
     try {
-      const { mode, workspacePath, hostUrl } = req.body;
+      const { mode, workspacePath, hostUrl, userName } = req.body;
       if (mode) config.mode = mode;
       if (workspacePath) config.workspacePath = workspacePath;
       if (hostUrl !== undefined) config.hostUrl = normalizeHostUrl(hostUrl);
+      // Only save userName to host config if explicitly provided AND no remote
+      // user is identified. Remote users register via /api/user/register instead.
+      // This prevents remote users from overwriting the host's display name.
+      if (userName !== undefined) {
+        config.userName = userName;
+      }
       await saveConfig(config);
-      // If user switched to HOST mode at runtime, start the tunnel on-demand
-      // so invite links work immediately without a restart.
-      // NOTE: opencode.json is intentionally NEVER rewritten here. The MCP url
-      // stays fixed (localhost) and REMOTE traffic is proxied to the host
-      // server-side — so Connect works instantly with zero restarts.
+      // Also register the user in the session map
+      if (userName) {
+        const rawIp = req.ip || req.socket.remoteAddress || "unknown";
+        const ip = rawIp.replace(/^::ffff:/, "");
+        userSessions.set(ip, { userName, lastSeen: Date.now() });
+      }
       let tunnelUrl: string | null = null;
       if (config.mode === "host" && ensureTunnel) {
         tunnelUrl = await ensureTunnel();
@@ -61,14 +105,25 @@ export async function createWebUI(
   app.get("/api/changes", async (req, res) => {
     try {
       const { file_path, user_id, limit, offset } = req.query;
-      const changes = await changeTracker.getChanges({
-        workspaceId: config.workspacePath,
-        filePath: file_path as string | undefined,
-        userId: user_id as string | undefined,
-        limit: limit ? parseInt(limit as string) : 50,
-        offset: offset ? parseInt(offset as string) : 0,
-      });
-      res.json({ changes, total: changes.length });
+      const lim = limit ? parseInt(limit as string) : 50;
+      const off = offset ? parseInt(offset as string) : 0;
+
+      const [changes, total] = await Promise.all([
+        changeTracker.getChanges({
+          workspaceId: config.workspacePath,
+          filePath: file_path as string | undefined,
+          userId: user_id as string | undefined,
+          limit: lim,
+          offset: off,
+        }),
+        changeTracker.getTotalCount({
+          workspaceId: config.workspacePath,
+          filePath: file_path as string | undefined,
+          userId: user_id as string | undefined,
+        }),
+      ]);
+
+      res.json({ changes, total });
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch changes" });
     }
@@ -98,7 +153,33 @@ export async function createWebUI(
     try {
       const members = await authManager.getTeamMembers(config.workspacePath);
       const online = await sessionManager.getOnlineUsers(config.workspacePath);
-      res.json({ members, online });
+
+      // Merge registered team members with web UI connected users
+      const webUsers = Array.from(userSessions.entries()).map(([ip, data]) => ({
+        userId: ip,
+        email: `${data.userName} (web)`,
+        permissions: "read,write",
+        role: "connected",
+        connectedAt: data.lastSeen,
+        source: "web",
+      }));
+
+      // Add host as first member
+      const hostMember = {
+        userId: "host",
+        email: config.userName || "Host",
+        permissions: "read,write,admin",
+        role: "host",
+        connectedAt: Date.now(),
+        source: "host",
+      };
+
+      const allMembers = [hostMember, ...members.map((m: any) => ({
+        ...m,
+        source: "invite",
+      })), ...webUsers];
+
+      res.json({ members: allMembers, online });
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch team" });
     }
@@ -143,6 +224,28 @@ export async function createWebUI(
     }
   });
 
+  // ==================== FILE CONTENT API (for diff) ====================
+  app.get("/api/file-content/*", async (req, res) => {
+    try {
+      const filePath = req.params[0];
+      const { promises: fs } = await import("fs");
+      const path = await import("path");
+      const fullPath = path.resolve(config.workspacePath, filePath);
+
+      const normalizedWorkspace = config.workspacePath.endsWith(path.sep)
+        ? config.workspacePath
+        : config.workspacePath + path.sep;
+      if (!fullPath.startsWith(normalizedWorkspace) && fullPath !== config.workspacePath) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+
+      const content = await fs.readFile(fullPath, "utf-8");
+      res.json({ content, path: filePath });
+    } catch (error) {
+      res.status(404).json({ error: "File not found" });
+    }
+  });
+
   // ==================== STATUS API ====================
   app.get("/api/status", (req, res) => {
     res.json({
@@ -150,7 +253,7 @@ export async function createWebUI(
       mode: config.mode,
       workspace: config.workspacePath,
       port: config.port,
-      version: "1.0.0",
+      version: "1.13.1",
       uptime: process.uptime(),
     });
   });
@@ -165,10 +268,6 @@ export async function createWebUI(
   });
 
   // ==================== SPA FALLBACK ====================
-  // IMPORTANT: never intercept MCP/SSE/API/health paths.
-  // Only serve index.html for browser navigation (Accept: text/html).
-  // This prevents GET /sse (Accept: text/event-stream) from ever receiving HTML,
-  // regardless of mount point (/ or /ui) or route order in the parent app.
   app.get("*", (req, res, next) => {
     const p = req.path || "";
     if (
@@ -184,14 +283,10 @@ export async function createWebUI(
       return next();
     }
     const accept = req.headers.accept || "";
-    // Browsers navigating to UI pages send Accept: text/html.
-    // MCP/SSE clients send text/event-stream or application/json.
-    // fetch() sends */* — only serve HTML for extensionless UI navigation paths.
     if (!accept.includes("text/html")) {
       if (accept !== "" && !accept.includes("*/*")) {
         return next();
       }
-      // Even for */*, don't serve HTML for paths that look like API/MCP calls
       if (p.includes(".") && !p.endsWith(".html")) {
         return next();
       }

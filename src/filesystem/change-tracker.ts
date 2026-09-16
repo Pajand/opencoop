@@ -15,6 +15,7 @@ export class ChangeTracker {
         workspace_id TEXT NOT NULL,
         file_path TEXT NOT NULL,
         user_id TEXT NOT NULL,
+        user_name TEXT,
         action TEXT NOT NULL,
         old_content_hash TEXT,
         new_content_hash TEXT,
@@ -44,20 +45,28 @@ export class ChangeTracker {
       CREATE INDEX IF NOT EXISTS idx_changes_timestamp
         ON change_logs(workspace_id, timestamp DESC)
     `);
+
+    // Migration: add user_name column if missing (for existing databases)
+    try {
+      runQuery(`ALTER TABLE change_logs ADD COLUMN user_name TEXT`);
+    } catch {
+      // Column already exists — ignore
+    }
   }
 
   async logChange(
     entry: Omit<ChangeLogEntry, "id" | "timestamp">
   ): Promise<void> {
     runQuery(
-      `INSERT INTO change_logs (id, workspace_id, file_path, user_id, action,
+      `INSERT INTO change_logs (id, workspace_id, file_path, user_id, user_name, action,
         old_content_hash, new_content_hash, old_path, new_path, metadata)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         uuidv4(),
         entry.workspaceId,
         entry.filePath,
         entry.userId,
+        entry.userName || null,
         entry.action,
         entry.oldContentHash || null,
         entry.newContentHash || null,
@@ -99,6 +108,7 @@ export class ChangeTracker {
       workspace_id: string;
       file_path: string;
       user_id: string;
+      user_name: string | null;
       action: string;
       old_content_hash: string | null;
       new_content_hash: string | null;
@@ -113,6 +123,7 @@ export class ChangeTracker {
       workspaceId: row.workspace_id,
       filePath: row.file_path,
       userId: row.user_id,
+      userName: row.user_name || undefined,
       action: row.action as ChangeLogEntry["action"],
       oldContentHash: row.old_content_hash || undefined,
       newContentHash: row.new_content_hash || undefined,
@@ -157,5 +168,26 @@ export class ChangeTracker {
       ),
       recentActivity: recent,
     };
+  }
+
+  async getTotalCount(params: {
+    workspaceId: string;
+    filePath?: string;
+    userId?: string;
+  }): Promise<number> {
+    let query = "SELECT COUNT(*) as value FROM change_logs WHERE workspace_id = ?";
+    const args: any[] = [params.workspaceId];
+
+    if (params.filePath) {
+      query += " AND file_path = ?";
+      args.push(params.filePath);
+    }
+
+    if (params.userId) {
+      query += " AND user_id = ?";
+      args.push(params.userId);
+    }
+
+    return getScalar<number>(query, args) || 0;
   }
 }

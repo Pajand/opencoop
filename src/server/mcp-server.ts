@@ -122,13 +122,13 @@ export class OpenCOOPServer {
           return await this.fileManager.readFile(args.path, { startLine: args.start_line, endLine: args.end_line });
         case "write_file":
           await this.fileManager.writeFile(args.path, args.content, { createDirs: args.create_dirs });
-          await this.changeTracker.logChange({ workspaceId: this.config.workspacePath, filePath: args.path, userId, action: "update", newContentHash: await this.fileManager.hash(args.path) });
+          await this.changeTracker.logChange({ workspaceId: this.config.workspacePath, filePath: args.path, userId, userName: this.config.userName || userId, action: "update", newContentHash: await this.fileManager.hash(args.path) });
           return `File written successfully: ${args.path}`;
         case "edit_file": {
           const oldHash = await this.fileManager.hash(args.path);
           const result = await this.fileManager.editFile(args.path, args.search, args.replace, { replaceAll: args.replace_all });
           const newHash = await this.fileManager.hash(args.path);
-          await this.changeTracker.logChange({ workspaceId: this.config.workspacePath, filePath: args.path, userId, action: "update", oldContentHash: oldHash, newContentHash: newHash, metadata: JSON.stringify({ changes: result.changes }) });
+          await this.changeTracker.logChange({ workspaceId: this.config.workspacePath, filePath: args.path, userId, userName: this.config.userName || userId, action: "update", oldContentHash: oldHash, newContentHash: newHash, metadata: JSON.stringify({ changes: result.changes }) });
           return `Edit applied: ${result.changes} occurrence(s) replaced in ${args.path}`;
         }
         case "list_files":
@@ -187,6 +187,7 @@ export class OpenCOOPServer {
       },
       async ({ path, start_line, end_line }) => {
         const userId = "user-" + randomUUID().slice(0, 8);
+        const userName = this.config.userName || userId;
         const content = await this.fileManager.readFile(path, {
           startLine: start_line,
           endLine: end_line,
@@ -195,6 +196,7 @@ export class OpenCOOPServer {
           workspaceId: this.config.workspacePath,
           filePath: path,
           userId,
+          userName,
           action: "read",
         });
         return {
@@ -213,13 +215,20 @@ export class OpenCOOPServer {
       },
       async ({ path, content, create_dirs }) => {
         const userId = "user-" + randomUUID().slice(0, 8);
+        const userName = this.config.userName || userId;
+        let oldContent = "";
+        try { oldContent = await this.fileManager.readFile(path); } catch {}
         await this.fileManager.writeFile(path, content, { createDirs: create_dirs });
+        const diff = this.computeDiff(oldContent, content);
         await this.changeTracker.logChange({
           workspaceId: this.config.workspacePath,
           filePath: path,
           userId,
+          userName,
           action: "update",
+          oldContentHash: oldContent ? await this.hashString(oldContent) : undefined,
           newContentHash: await this.fileManager.hash(path),
+          metadata: diff ? JSON.stringify({ diff }) : undefined,
         });
         return {
           content: [{ type: "text" as const, text: `File written successfully: ${path}` }],
@@ -238,20 +247,25 @@ export class OpenCOOPServer {
       },
       async ({ path, search, replace, replace_all }) => {
         const userId = "user-" + randomUUID().slice(0, 8);
+        const userName = this.config.userName || userId;
+        const oldContent = await this.fileManager.readFile(path);
         const oldHash = await this.fileManager.hash(path);
         const result = await this.fileManager.editFile(path, search, replace, {
           replaceAll: replace_all,
         });
+        const newContent = await this.fileManager.readFile(path);
         const newHash = await this.fileManager.hash(path);
+        const diff = this.computeDiff(oldContent, newContent);
 
         await this.changeTracker.logChange({
           workspaceId: this.config.workspacePath,
           filePath: path,
           userId,
+          userName,
           action: "update",
           oldContentHash: oldHash,
           newContentHash: newHash,
-          metadata: JSON.stringify({ changes: result.changes }),
+          metadata: JSON.stringify({ changes: result.changes, diff }),
         });
 
         return {
@@ -343,6 +357,7 @@ export class OpenCOOPServer {
       },
       async ({ path, reason }) => {
         const userId = "user-" + randomUUID().slice(0, 8);
+        const userName = this.config.userName || userId;
         const sessionId = randomUUID();
 
         const result = await this.lockManager.acquireLock({
@@ -527,6 +542,58 @@ export class OpenCOOPServer {
         };
       }
     );
+  }
+
+  private computeDiff(oldText: string, newText: string): Array<{ type: 'added' | 'removed' | 'unchanged'; line: string }> | null {
+    if (oldText === newText) return null;
+    const oldLines = oldText.split('\n');
+    const newLines = newText.split('\n');
+    const diff: Array<{ type: 'added' | 'removed' | 'unchanged'; line: string }> = [];
+
+    // Simple line-by-line diff using LCS
+    const lcs = this.lcs(oldLines, newLines);
+    let oi = 0, ni = 0, li = 0;
+
+    while (oi < oldLines.length || ni < newLines.length) {
+      if (li < lcs.length && oi < oldLines.length && oldLines[oi] === lcs[li] && ni < newLines.length && newLines[ni] === lcs[li]) {
+        diff.push({ type: 'unchanged', line: oldLines[oi] });
+        oi++; ni++; li++;
+      } else if (ni >= newLines.length || (oi < oldLines.length && (li >= lcs.length || oldLines[oi] !== lcs[li]))) {
+        diff.push({ type: 'removed', line: oldLines[oi] });
+        oi++;
+      } else {
+        diff.push({ type: 'added', line: newLines[ni] });
+        ni++;
+      }
+    }
+
+    return diff.length > 0 ? diff : null;
+  }
+
+  private lcs(a: string[], b: string[]): string[] {
+    const m = a.length, n = b.length;
+    const dp: number[][] = Array.from({ length: m + 1 }, () => Array(n + 1).fill(0));
+
+    for (let i = 1; i <= m; i++) {
+      for (let j = 1; j <= n; j++) {
+        if (a[i - 1] === b[j - 1]) dp[i][j] = dp[i - 1][j - 1] + 1;
+        else dp[i][j] = Math.max(dp[i - 1][j], dp[i][j - 1]);
+      }
+    }
+
+    const result: string[] = [];
+    let i = m, j = n;
+    while (i > 0 && j > 0) {
+      if (a[i - 1] === b[j - 1]) { result.unshift(a[i - 1]); i--; j--; }
+      else if (dp[i - 1][j] > dp[i][j - 1]) i--;
+      else j--;
+    }
+    return result;
+  }
+
+  private async hashString(content: string): Promise<string> {
+    const { createHash } = await import("crypto");
+    return createHash("sha256").update(content).digest("hex");
   }
 
   async startHttp(port: number): Promise<void> {

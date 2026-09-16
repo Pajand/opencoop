@@ -6,6 +6,7 @@ export interface ServerConfig {
   mode: "host" | "remote";
   hostUrl?: string;
   inviteToken?: string;
+  userName?: string;
 }
 
 export interface FileMetadata {

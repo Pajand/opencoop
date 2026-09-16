@@ -4,7 +4,7 @@
 
 # OpenCOOP
 
-![Version](https://img.shields.io/badge/version-1.11.1-blue)
+![Version](https://img.shields.io/badge/version-1.13.1-blue)
 ![License](https://img.shields.io/badge/license-Non--Commercial-green)
 ![OpenCode](https://img.shields.io/badge/OpenCode-Plugin-purple)
 ![MCP](https://img.shields.io/badge/MCP-SSE-orange)
@@ -281,7 +281,7 @@ curl -s -o /dev/null -w '%{http_code} %{content_type}\n' --max-time 3 -H 'Accept
 
 ### Plugin recognized by OpenCode but UI not loading / MCP not starting
 
-1. **Plugin version too old**: Must be `1.11.1` or newer. Check with `npm ls -g @opencoop/opencode-plugin`.
+1. **Plugin version too old**: Must be `1.13.1` or newer. Check with `npm ls -g @opencoop/opencode-plugin`.
 2. **Stale plugin cache**: Clear and restart:
    ```bash
    rm -rf ~/.cache/opencode/packages/@opencoop
