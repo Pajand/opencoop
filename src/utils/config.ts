@@ -9,7 +9,20 @@ const CONFIG_FILE = path.join(CONFIG_DIR, "config.json");
 export async function loadConfig(project?: any): Promise<ServerConfig> {
   try {
     const data = await fs.readFile(CONFIG_FILE, "utf-8");
-    return JSON.parse(data);
+    const parsed = JSON.parse(data);
+    // Self-healing: if the file doesn't look like a ServerConfig
+    // (corrupt, or clobbered by another tool), ignore it and use defaults
+    // instead of crashing every plugin instance at startup.
+    if (
+      !parsed ||
+      typeof parsed !== "object" ||
+      typeof parsed.port !== "number" ||
+      typeof parsed.workspacePath !== "string" ||
+      typeof parsed.databasePath !== "string"
+    ) {
+      return getDefaultConfig();
+    }
+    return parsed as ServerConfig;
   } catch {
     return getDefaultConfig();
   }

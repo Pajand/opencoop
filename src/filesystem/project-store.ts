@@ -8,7 +8,7 @@ import path from "path";
  *
  *   my-project/
  *   └── .opencoop/
- *       ├── config.json    — project id, members, settings (travels with project)
+ *       ├── project.json   — project id, members, settings (travels with project)
  *       └── snapshots/     — previous file versions, named by content hash
  *           └── <sha256>
  *
@@ -27,7 +27,9 @@ import path from "path";
 
 export const OPENCOOP_DIR = ".opencoop";
 export const SNAPSHOTS_SUBDIR = "snapshots";
-export const PROJECT_CONFIG_FILE = "config.json";
+// NOTE: NEVER name this "config.json" — the plugin's GLOBAL server config
+// lives at ~/.opencoop/config.json, which collides when workspace == $HOME.
+export const PROJECT_CONFIG_FILE = "project.json";
 
 /** Max snapshots kept per file (older ones are pruned automatically). */
 export const MAX_SNAPSHOTS_PER_FILE = 20;
@@ -79,7 +81,10 @@ function readProjectConfig(workspacePath: string): ProjectConfig | null {
   try {
     const raw = fs.readFileSync(getProjectConfigPath(workspacePath), "utf-8");
     const parsed = JSON.parse(raw);
-    if (!parsed || typeof parsed !== "object" || !Array.isArray(parsed.members)) {
+    // Strict validation: must look like OUR ProjectConfig, never accept
+    // foreign files (e.g. the global server config) — refuse to overwrite.
+    if (!parsed || typeof parsed !== "object") return null;
+    if (typeof parsed.projectId !== "string" || !Array.isArray(parsed.members)) {
       return null;
     }
     return parsed as ProjectConfig;
@@ -119,7 +124,23 @@ export function ensureProjectStore(workspacePath: string): void {
 
     fs.mkdirSync(getSnapshotsDir(workspacePath), { recursive: true });
 
+    const cfgPath = getProjectConfigPath(workspacePath);
     if (!readProjectConfig(workspacePath)) {
+      let foreignExists = false;
+      try {
+        foreignExists = fs.statSync(cfgPath).isFile();
+      } catch {
+        foreignExists = false;
+      }
+      if (foreignExists) {
+        // A file is here but it is NOT our ProjectConfig (foreign or corrupt).
+        // Back it up instead of overwriting, then start fresh.
+        try {
+          fs.renameSync(cfgPath, cfgPath + ".bak");
+        } catch {
+          return;
+        }
+      }
       writeProjectConfig(workspacePath, {
         projectId: newProjectId(),
         createdAt: new Date().toISOString(),
