@@ -355,6 +355,13 @@ export async function createWebUI(
       const filePath = req.params[0];
       const { promises: fs } = await import("fs");
       const path = await import("path");
+      const { isProjectStorePath: isStorePath, OPENCOOP_DIR: STORE_DIR } = await import("../filesystem/project-store.js");
+
+      // Never serve the internal project store (snapshots, members, DB).
+      if (isStorePath(config.workspacePath, filePath)) {
+        return res.status(403).json({ error: `Access denied: "${STORE_DIR}" is internal` });
+      }
+
       const fullPath = path.resolve(config.workspacePath, filePath);
 
       const normalizedWorkspace = config.workspacePath.endsWith(path.sep)
@@ -378,7 +385,7 @@ export async function createWebUI(
       mode: config.mode,
       workspace: config.workspacePath,
       port: config.port,
-      version: "1.14.0",
+      version: "1.14.1",
       uptime: process.uptime(),
     });
   });

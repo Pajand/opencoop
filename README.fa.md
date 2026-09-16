@@ -4,7 +4,7 @@
 
 # اوپن‌کوپ
 
-![Version](https://img.shields.io/badge/version-1.14.0-blue)
+![Version](https://img.shields.io/badge/version-1.14.1-blue)
 ![License](https://img.shields.io/badge/license-Non--Commercial-green)
 ![OpenCode](https://img.shields.io/badge/OpenCode-Plugin-purple)
 ![MCP](https://img.shields.io/badge/MCP-SSE-orange)
@@ -315,7 +315,7 @@ curl -s -o /dev/null -w '%{http_code} %{content_type}\n' --max-time 3 -H 'Accept
 
 ### پلاگین شناخته شده ولی UI بالا نمیاد / MCP شروع نمیشه
 
-1. **نسخه پلاگین خیلی قدیمیه**: باید `1.14.0` یا بالاتر باشه.
+1. **نسخه پلاگین خیلی قدیمیه**: باید `1.14.1` یا بالاتر باشه.
 2. **کش قدیمی پلاگین**:
    ```bash
    rm -rf ~/.cache/opencode/packages/@opencoop
