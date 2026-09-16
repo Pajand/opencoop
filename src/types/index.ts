@@ -42,13 +42,24 @@ export interface ChangeLogEntry {
   filePath: string;
   userId: string;
   userName?: string;
-  action: "create" | "read" | "update" | "delete" | "move" | "lock" | "unlock";
+  action: "create" | "read" | "update" | "delete" | "move" | "lock" | "unlock" | "rollback";
   oldContentHash?: string;
   newContentHash?: string;
   oldPath?: string;
   newPath?: string;
   metadata?: string;
   timestamp: Date;
+}
+
+export interface SnapshotInfo {
+  id: string;
+  workspaceId: string;
+  filePath: string;
+  contentHash: string;
+  size: number;
+  changeId?: string;
+  createdBy?: string;
+  createdAt: Date;
 }
 
 export interface TeamMember {

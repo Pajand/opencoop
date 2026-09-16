@@ -37,7 +37,7 @@
           </div>
           <div class="logo-text">
             <h1>OpenCOOP</h1>
-            <span class="version">v1.13.3</span>
+            <span class="version">v1.14.0</span>
           </div>
         </div>
       </div>
@@ -527,6 +527,28 @@
       </div>
       <div class="modal-footer">
         <button class="btn btn-secondary" onclick="closeDiffModal()">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- SNAPSHOTS MODAL -->
+  <div id="snapshots-modal" class="modal-overlay hidden">
+    <div class="modal modal-lg">
+      <div class="modal-header">
+        <div class="modal-icon diff-icon">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"/>
+            <polyline points="12 6 12 12 16 14"/>
+          </svg>
+        </div>
+        <h2 id="snapshots-title">Version History</h2>
+        <p id="snapshots-subtitle"></p>
+      </div>
+      <div class="modal-body diff-body">
+        <div id="snapshots-content" class="diff-container"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeSnapshotsModal()">Close</button>
       </div>
     </div>
   </div>

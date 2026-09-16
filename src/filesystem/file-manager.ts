@@ -2,6 +2,11 @@ import { promises as fs } from "fs";
 import path from "path";
 import crypto from "crypto";
 import { FileMetadata } from "../types/index.js";
+import {
+  OPENCOOP_DIR,
+  ensureProjectStore,
+  isProjectStorePath,
+} from "./project-store.js";
 
 export class FileManager {
   private workspacePath: string;
@@ -12,12 +17,24 @@ export class FileManager {
     this.normalizedWorkspace = this.workspacePath.endsWith(path.sep)
       ? this.workspacePath
       : this.workspacePath + path.sep;
+    // Every workspace gets its persistent .opencoop/ store.
+    // Re-selecting a previous project keeps all its history.
+    ensureProjectStore(this.workspacePath);
   }
 
   private validatePath(relativePath: string): string {
     // Block absolute paths — only relative paths within workspace are allowed
     if (path.isAbsolute(relativePath)) {
       throw new Error(`Access denied: absolute path "${relativePath}" is not allowed`);
+    }
+
+    // Block the internal project store — history/snapshots are only
+    // accessible via the snapshots/rollback APIs, never directly.
+    if (isProjectStorePath(this.workspacePath, relativePath)) {
+      throw new Error(
+        `Access denied: "${OPENCOOP_DIR}" is OpenCOOP's internal project store. ` +
+          `Use list_snapshots / rollback_file instead.`
+      );
     }
 
     const resolved = path.resolve(this.workspacePath, relativePath);
@@ -111,6 +128,9 @@ export class FileManager {
       const entries = await fs.readdir(dir, { withFileTypes: true });
 
       for (const entry of entries) {
+        // Internal project store stays invisible in listings.
+        if (entry.name === OPENCOOP_DIR) continue;
+
         const entryPath = path.join(dir, entry.name);
 
         // Security: skip symlinks that point outside workspace
@@ -161,6 +181,9 @@ export class FileManager {
       for (const entry of entries) {
         if (results.length >= maxResults) break;
 
+        // Internal project store stays invisible in search.
+        if (entry.name === OPENCOOP_DIR) continue;
+
         const entryPath = path.join(dir, entry.name);
 
         // Security: skip symlinks that point outside workspace
@@ -204,6 +227,9 @@ export class FileManager {
       const entries = await fs.readdir(dir, { withFileTypes: true });
 
       for (const entry of entries) {
+        // Internal project store is never searched.
+        if (entry.name === OPENCOOP_DIR) continue;
+
         const entryPath = path.join(dir, entry.name);
 
         // Security: skip symlinks that point outside workspace
@@ -263,6 +289,9 @@ export class FileManager {
       const children: any[] = [];
 
       for (const entry of entries) {
+        // Internal project store stays invisible in the tree.
+        if (entry.name === OPENCOOP_DIR) continue;
+
         if (options?.excludePatterns?.some((p) => this.matchesGlob(entry.name, p))) {
           continue;
         }

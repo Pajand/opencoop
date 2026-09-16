@@ -4,7 +4,7 @@
 
 # OpenCOOP
 
-![Version](https://img.shields.io/badge/version-1.13.3-blue)
+![Version](https://img.shields.io/badge/version-1.14.0-blue)
 ![License](https://img.shields.io/badge/license-Non--Commercial-green)
 ![OpenCode](https://img.shields.io/badge/OpenCode-Plugin-purple)
 ![MCP](https://img.shields.io/badge/MCP-SSE-orange)
@@ -71,8 +71,6 @@ OpenCOOP is an **OpenCode plugin** that lets multiple developers (each with thei
 ### Coming Soon 🚀
 
 - **Admin Dashboard**: Manage team members, permissions, and access
-- **Snapshots**: Admin can take point-in-time snapshots of the entire project
-- **Rollback**: One-click restore to any previous snapshot if something breaks
 - **Conflict Resolution**: Smart merge when two users edit the same lines
 
 **Up to 50 developers** can collaborate simultaneously with full audit trails.
@@ -84,10 +82,14 @@ OpenCOOP is an **OpenCode plugin** that lets multiple developers (each with thei
 | 🔗 **Shared MCP Server** | Multiple OpenCode instances share the same project |
 | 👥 **Up to 50 Users** | Real-time collaboration with dozens of team members |
 | 📝 **Change Tracking** | Every file modification is logged with user attribution |
+| 📸 **Auto Snapshots** | Every write/edit saves the previous version (last 20 per file, 2MB cap, binaries skipped) |
+| ↩️ **One-Click Rollback** | Restore any file from Changes page, or let the AI undo its own mistakes via `rollback_file` |
+| 🤖 **AI Self-Healing** | `opencoop_guide` teaches any model the rules; `rollback_file` lets it fix its own errors without human help |
+| 💾 **Project-Local History** | All history lives in `<project>/.opencoop/` — survives restart, travels with the project, auto-gitignored |
 | 🔒 **File Locking** | Prevents conflicts when multiple users edit the same file |
 | 🌐 **Web Dashboard** | Beautiful UI for configuration and monitoring |
 | 🔑 **Invite System** | Secure token-based team member invitations |
-| 🛡️ **Sandbox Security** | Path traversal protection, symlink blocking, absolute path blocking, and input validation |
+| 🛡️ **Sandbox Security** | Path traversal protection, symlink blocking, absolute path blocking, `.opencoop` store blocked from remote access, and input validation |
 | 🌍 **Remote Access** | SSH tunnel (tinyfi.sh) — works behind NAT, firewall, or VPN |
 | 📊 **Statistics** | View changes per user, recent activity, and more |
 | 🔄 **Auto-Recovery** | Tunnel auto-reconnects, server auto-restarts on failure |
@@ -201,6 +203,9 @@ Once connected, your AI has access to 15 tools:
 | `invite_member` | Generate invite link for new members |
 | `list_members` | List all team members |
 | `revoke_access` | Revoke a member's access |
+| `opencoop_guide` | START HERE — AI calls this first; teaches the rules + confirmation question |
+| `list_snapshots` | List saved previous versions of a file |
+| `rollback_file` | Undo a mistake: restore a file (just path = undo last change) |
 
 ## Architecture
 
@@ -311,7 +316,7 @@ curl -s -o /dev/null -w '%{http_code} %{content_type}\n' --max-time 3 -H 'Accept
 
 ### Plugin recognized by OpenCode but UI not loading / MCP not starting
 
-1. **Plugin version too old**: Must be `1.13.3` or newer. Check with `npm ls -g @opencoop/opencode-plugin`.
+1. **Plugin version too old**: Must be `1.14.0` or newer. Check with `npm ls -g @opencoop/opencode-plugin`.
 2. **Stale plugin cache**: Clear and restart:
    ```bash
    rm -rf ~/.cache/opencode/packages/@opencoop

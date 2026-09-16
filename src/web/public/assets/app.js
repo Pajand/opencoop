@@ -589,6 +589,7 @@ async function loadChanges(page) {
       let html = changes.map((item, i) => {
         const displayName = item.userName || item.userId;
         const hasMetadata = item.metadata && item.metadata.includes('diff');
+        const canRollback = ['update', 'create', 'rollback'].includes(item.action);
         return `
           <div class="change-item ${hasMetadata ? 'clickable' : ''}" data-idx="${i}" style="animation-delay: ${i * 0.03}s">
             <span class="change-action ${item.action}">${item.action}</span>
@@ -599,6 +600,8 @@ async function loadChanges(page) {
             </span>
             <span class="change-time">${formatTime(item.timestamp)}</span>
             ${hasMetadata ? '<button class="diff-btn" data-diff-idx="' + i + '"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/></svg> View Diff</button>' : ''}
+            ${canRollback ? '<button class="rollback-btn" data-rb-idx="' + i + '" title="Restore this file to how it looked before this change"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg> Rollback</button>' : ''}
+            <button class="snapshots-btn" data-snaps-idx="' + i + '" title="See all saved versions of this file"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> History</button>
           </div>
         `;
       }).join('');
@@ -620,32 +623,54 @@ async function loadChanges(page) {
 
       container.innerHTML = html;
 
-      // Store changes data for diff modal
+      // Store changes data for modals (delegation reads from here so it
+      // always uses the current page even though we bind only once).
       container._changesData = changes;
 
-      // Bind diff buttons via event delegation
-      container.addEventListener('click', (e) => {
-        const diffBtn = e.target.closest('.diff-btn');
-        if (diffBtn) {
-          e.stopPropagation();
-          const idx = parseInt(diffBtn.dataset.diffIdx);
-          const item = changes[idx];
-          if (item) {
-            const displayName = item.userName || item.userId;
-            showDiffModal(item.filePath, displayName, item.metadata);
+      // Bind buttons via event delegation (bound once — re-binding on every
+      // page load would stack duplicate handlers).
+      if (!container._changesBound) {
+        container._changesBound = true;
+        container.addEventListener('click', (e) => {
+          const data = container._changesData || [];
+          const diffBtn = e.target.closest('.diff-btn');
+          if (diffBtn) {
+            e.stopPropagation();
+            const idx = parseInt(diffBtn.dataset.diffIdx);
+            const item = data[idx];
+            if (item) {
+              const displayName = item.userName || item.userId;
+              showDiffModal(item.filePath, displayName, item.metadata);
+            }
+            return;
           }
-          return;
-        }
-        const changeItem = e.target.closest('.change-item.clickable');
-        if (changeItem) {
-          const idx = parseInt(changeItem.dataset.idx);
-          const item = changes[idx];
-          if (item) {
-            const displayName = item.userName || item.userId;
-            showDiffModal(item.filePath, displayName, item.metadata);
+          const rbBtn = e.target.closest('.rollback-btn');
+          if (rbBtn) {
+            e.stopPropagation();
+            const idx = parseInt(rbBtn.dataset.rbIdx);
+            const item = data[idx];
+            if (item) rollbackChange(item.id, item.filePath);
+            return;
           }
-        }
-      });
+          const snapsBtn = e.target.closest('.snapshots-btn');
+          if (snapsBtn) {
+            e.stopPropagation();
+            const idx = parseInt(snapsBtn.dataset.snapsIdx);
+            const item = data[idx];
+            if (item) showSnapshotsModal(item.filePath);
+            return;
+          }
+          const changeItem = e.target.closest('.change-item.clickable');
+          if (changeItem) {
+            const idx = parseInt(changeItem.dataset.idx);
+            const item = data[idx];
+            if (item) {
+              const displayName = item.userName || item.userId;
+              showDiffModal(item.filePath, displayName, item.metadata);
+            }
+          }
+        });
+      }
     }
   } catch {
     showToast('error', 'Error', 'Failed to load changes');
@@ -673,6 +698,7 @@ async function loadTeam() {
         const source = member.source || 'invite';
         const roleLabel = source === 'host' ? 'Host'
           : source === 'web' ? 'Connected'
+          : source === 'history' ? 'Contributor'
           : member.role || 'member';
         const roleClass = source === 'host' ? 'host'
           : source === 'web' ? 'connected'
@@ -682,7 +708,7 @@ async function loadTeam() {
             <div class="user-avatar" style="background: ${getAvatarColor(name)}">${name.charAt(0).toUpperCase()}</div>
             <div class="user-info">
               <div class="user-name">${escapeHtml(name)}</div>
-              <div class="user-status">${source === 'host' ? 'Workspace owner' : source === 'web' ? 'Via web UI' : 'Via invite link'}</div>
+              <div class="user-status">${source === 'host' ? 'Workspace owner' : source === 'web' ? 'Via web UI' : source === 'history' ? `Past contributor${member.changeCount ? ` • ${member.changeCount} changes` : ''}` : 'Via invite link'}</div>
             </div>
             <span class="member-role ${roleClass}">${roleLabel}</span>
           </div>
@@ -896,6 +922,10 @@ document.addEventListener('keydown', (e) => {
     if (diffModal && !diffModal.classList.contains('hidden')) {
       closeDiffModal();
     }
+    const snapsModal = document.getElementById('snapshots-modal');
+    if (snapsModal && !snapsModal.classList.contains('hidden')) {
+      closeSnapshotsModal();
+    }
   }
 });
 
@@ -935,6 +965,95 @@ function showDiffModal(filePath, userName, metadata) {
 
 function closeDiffModal() {
   document.getElementById('diff-modal').classList.add('hidden');
+}
+
+// ============================================
+// Snapshots & Rollback
+// ============================================
+
+function formatBytes(bytes) {
+  if (!bytes) return '0 B';
+  const units = ['B', 'KB', 'MB'];
+  let i = 0;
+  let n = bytes;
+  while (n >= 1024 && i < units.length - 1) { n /= 1024; i++; }
+  return (i === 0 ? n : n.toFixed(1)) + ' ' + units[i];
+}
+
+async function rollbackChange(changeId, filePath) {
+  if (!confirm(`Restore "${filePath}" to how it looked BEFORE this change?\n\nThe current version is snapshotted first, so this is reversible.`)) return;
+  try {
+    const res = await fetch(`${API}/api/rollback`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ change_id: changeId }),
+    });
+    const data = await res.json();
+    if (data.success) {
+      showToast('success', 'Rolled back', `${filePath} restored to version from ${formatTime(data.restoredFrom)}`);
+      loadChanges();
+    } else {
+      showToast('error', 'Rollback failed', data.error || 'Unknown error');
+    }
+  } catch {
+    showToast('error', 'Rollback failed', 'Network error');
+  }
+}
+
+async function showSnapshotsModal(filePath) {
+  const modal = document.getElementById('snapshots-modal');
+  document.getElementById('snapshots-title').textContent = filePath;
+  document.getElementById('snapshots-subtitle').textContent = 'Saved versions (newest first)';
+  const content = document.getElementById('snapshots-content');
+  content.innerHTML = '<div class="diff-empty">Loading versions...</div>';
+  modal.classList.remove('hidden');
+
+  try {
+    const res = await fetch(`${API}/api/snapshots?file=${encodeURIComponent(filePath)}&limit=20`);
+    const data = await res.json();
+    const snaps = data.snapshots || [];
+    if (snaps.length === 0) {
+      content.innerHTML = '<div class="diff-empty">No saved versions yet.<br>Snapshots are created automatically on every write/edit.</div>';
+      return;
+    }
+    content.innerHTML = snaps.map((s, i) => `
+      <div class="snapshot-item">
+        <div class="snapshot-info">
+          <div class="snapshot-version">Version ${snaps.length - i} ${i === 0 ? '<span class="snapshot-badge">latest backup</span>' : ''}</div>
+          <div class="snapshot-meta">${formatTime(s.createdAt)}${s.createdBy ? ' • by ' + escapeHtml(s.createdBy) : ''} • ${formatBytes(s.size)}</div>
+        </div>
+        <button class="btn btn-sm btn-secondary" onclick="restoreSnapshot('${encodeURIComponent(filePath)}', '${s.id}')">Restore</button>
+      </div>
+    `).join('');
+  } catch {
+    content.innerHTML = '<div class="diff-empty">Failed to load versions</div>';
+  }
+}
+
+async function restoreSnapshot(encodedPath, snapshotId) {
+  const filePath = decodeURIComponent(encodedPath);
+  if (!confirm(`Restore "${filePath}" to this saved version?\n\nThe current version is snapshotted first, so this is reversible.`)) return;
+  try {
+    const res = await fetch(`${API}/api/rollback`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path: filePath, snapshot_id: snapshotId }),
+    });
+    const data = await res.json();
+    if (data.success) {
+      showToast('success', 'Restored', `${filePath} restored`);
+      closeSnapshotsModal();
+      loadChanges();
+    } else {
+      showToast('error', 'Restore failed', data.error || 'Unknown error');
+    }
+  } catch {
+    showToast('error', 'Restore failed', 'Network error');
+  }
+}
+
+function closeSnapshotsModal() {
+  document.getElementById('snapshots-modal').classList.add('hidden');
 }
 
 function escapeHtml(str) {

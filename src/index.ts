@@ -10,6 +10,7 @@ import { ChangeTracker } from "./filesystem/change-tracker.js";
 import { AuthManager } from "./auth/auth-manager.js";
 import { SessionManager } from "./auth/session-manager.js";
 import { initDatabase, startAutoSave, stopAutoSave } from "./utils/database.js";
+import { buildGuideText } from "./utils/guide.js";
 
 async function isServerAlive(port: number): Promise<boolean> {
   try {
@@ -90,10 +91,21 @@ const plugin: PluginModule = {
 
       const userId = () => "user-" + randomUUID().slice(0, 8);
 
+      const ws = workspacePath;
+      const PRIORITY = `SHARED PROJECT (${ws}). If the user confirmed working in the shared project, ALWAYS use this tool for these files — NEVER local tools and NEVER Bash (cat/echo/sed/redirects). Bash bypasses tracking and snapshots, so Bash mistakes CANNOT be undone. Paths are relative to the workspace root.`;
+
       const tools: Record<string, any> = {};
 
+      tools.opencoop_guide = defineTool(
+        "START HERE — call FIRST in every new conversation BEFORE any file work. Explains the shared team project, the EXACT confirmation question to ask the user, and all behavior rules.",
+        {},
+        async (_args: any, _ctx: any) => {
+          return buildGuideText({ mode: config.mode, workspacePath: ws, userName: config.userName });
+        }
+      );
+
       tools.read_file = defineTool(
-        "Read the contents of a file in the shared project. Use this to view code, configs, or any text file.",
+        `Read a file from the shared team project. ${PRIORITY}`,
         { path: z.string(), start_line: z.number().optional(), end_line: z.number().optional() },
         async (args: any, _ctx: any) => {
           const uid = userId();
@@ -107,26 +119,52 @@ const plugin: PluginModule = {
       );
 
       tools.write_file = defineTool(
-        "Create or overwrite a file in the shared project. This will be tracked in the audit log.",
+        `Create or overwrite a file in the shared team project. ${PRIORITY} Automatically snapshots the previous version. If you break a file, fix it yourself with rollback_file.`,
         { path: z.string(), content: z.string(), create_dirs: z.boolean().optional() },
         async (args: any, _ctx: any) => {
           const uid = userId();
+          await changeTracker.snapshotBeforeChange(workspacePath, args.path, (args._opencoop_user as string) || config.userName || uid);
           await fileManager.writeFile(args.path, args.content, { createDirs: args.create_dirs });
           await changeTracker.logChange({ workspaceId: workspacePath, filePath: args.path, userId: uid, userName: (args._opencoop_user as string) || config.userName || uid, action: "update", newContentHash: await fileManager.hash(args.path) });
-          return `File written successfully: ${args.path}`;
+          return `File written successfully: ${args.path} (previous version snapshotted — use rollback_file to undo if needed)`;
         }
       );
 
       tools.edit_file = defineTool(
-        "Make a targeted edit to a file using search and replace. Preferred over write_file for modifying existing files.",
+        `Make a targeted edit in the shared team project. ${PRIORITY} PREFER over write_file (smaller edits = fewer conflicts). Previous version snapshotted automatically.`,
         { path: z.string(), search: z.string(), replace: z.string(), replace_all: z.boolean().optional() },
         async (args: any, _ctx: any) => {
           const uid = userId();
           const oldHash = await fileManager.hash(args.path);
+          await changeTracker.snapshotBeforeChange(workspacePath, args.path, (args._opencoop_user as string) || config.userName || uid);
           const result = await fileManager.editFile(args.path, args.search, args.replace, { replaceAll: args.replace_all });
           const newHash = await fileManager.hash(args.path);
           await changeTracker.logChange({ workspaceId: workspacePath, filePath: args.path, userId: uid, userName: (args._opencoop_user as string) || config.userName || uid, action: "update", oldContentHash: oldHash, newContentHash: newHash, metadata: JSON.stringify({ changes: result.changes }) });
-          return `Edit applied: ${result.changes} occurrence(s) replaced in ${args.path}`;
+          return `Edit applied: ${result.changes} occurrence(s) replaced in ${args.path} (previous version snapshotted — use rollback_file to undo if needed)`;
+        }
+      );
+
+      tools.list_snapshots = defineTool(
+        "List saved previous versions of a shared-project file. Use before rollback_file to pick a version, or to answer 'what versions exist'.",
+        { file_path: z.string().optional(), limit: z.number().optional() },
+        async (args: any, _ctx: any) => {
+          const snaps = await changeTracker.getSnapshots({ workspaceId: workspacePath, filePath: args.file_path, limit: args.limit || 20 });
+          return JSON.stringify(snaps, null, 2);
+        }
+      );
+
+      tools.rollback_file = defineTool(
+        "UNDO YOUR MISTAKE: restore a shared-project file to a previous version. WHEN: you broke a file, result looks wrong, or user says undo/revert/restore. HOW: pass ONLY path to undo the last change. For a specific version: list_snapshots first, then pass path + snapshot_id. SAFE: current state is snapshotted first, so rollback is reversible. After rollback, tell the user and retry correctly.",
+        { path: z.string(), snapshot_id: z.string().optional(), change_id: z.string().optional() },
+        async (args: any, _ctx: any) => {
+          const uid = userId();
+          const uname = (args._opencoop_user as string) || config.userName || uid;
+          const result = args.change_id
+            ? await changeTracker.rollbackToChange({ workspaceId: workspacePath, workspacePath, changeId: args.change_id, userId: uid, userName: uname })
+            : args.snapshot_id
+              ? await changeTracker.rollbackToSnapshot({ workspaceId: workspacePath, workspacePath, filePath: args.path, snapshotId: args.snapshot_id, userId: uid, userName: uname })
+              : await changeTracker.rollbackToLatest({ workspaceId: workspacePath, workspacePath, filePath: args.path, userId: uid, userName: uname });
+          return `Rolled back ${result.filePath} to the version from ${result.restoredFrom}. Previous state snapshotted first — reversible. Now retry your task correctly.`;
         }
       );
 

@@ -93,6 +93,7 @@ async function main() {
     },
     async ({ path, content, create_dirs }) => {
       const userId = "user-" + randomUUID().slice(0, 8);
+      await changeTracker.snapshotBeforeChange(config.workspacePath, path, config.userName || userId);
       await fileManager.writeFile(path, content, { createDirs: create_dirs });
       await changeTracker.logChange({
         workspaceId: config.workspacePath,
@@ -102,7 +103,7 @@ async function main() {
         newContentHash: await fileManager.hash(path),
       });
       return {
-        content: [{ type: "text" as const, text: `File written successfully: ${path}` }],
+        content: [{ type: "text" as const, text: `File written successfully: ${path} (previous version snapshotted)` }],
       };
     }
   );
@@ -119,6 +120,7 @@ async function main() {
     async ({ path, search, replace, replace_all }) => {
       const userId = "user-" + randomUUID().slice(0, 8);
       const oldHash = await fileManager.hash(path);
+      await changeTracker.snapshotBeforeChange(config.workspacePath, path, config.userName || userId);
       const result = await fileManager.editFile(path, search, replace, {
         replaceAll: replace_all,
       });
@@ -310,6 +312,61 @@ async function main() {
       const online = await sessionManager.getOnlineUsers(config.workspacePath);
       return {
         content: [{ type: "text" as const, text: JSON.stringify(online, null, 2) }],
+      };
+    }
+  );
+
+  // Rollback + snapshots + guide
+  mcpServer.tool(
+    "list_snapshots",
+    "List saved previous versions of a shared-project file. Use before rollback_file to pick a version.",
+    {
+      file_path: z.string().optional().describe("File to list versions for (relative path)"),
+      limit: z.number().optional().describe("Max entries (default: 20)"),
+    },
+    async ({ file_path, limit }) => {
+      const snaps = await changeTracker.getSnapshots({
+        workspaceId: config.workspacePath,
+        filePath: file_path,
+        limit: limit || 20,
+      });
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify(snaps, null, 2) }],
+      };
+    }
+  );
+
+  mcpServer.tool(
+    "rollback_file",
+    "UNDO YOUR MISTAKE: restore a shared-project file to a previous version. Pass ONLY path to undo the last change. For a specific version: list_snapshots first, then pass path + snapshot_id. SAFE: current state is snapshotted first, so rollback is reversible.",
+    {
+      path: z.string().describe("Relative file path to restore"),
+      snapshot_id: z.string().optional().describe("Specific version (from list_snapshots). Omit to undo last change."),
+      change_id: z.string().optional().describe("Restore to before this change-log entry. Omit to undo last change."),
+    },
+    async ({ path, snapshot_id, change_id }) => {
+      const userId = "user-" + randomUUID().slice(0, 8);
+      const userName = config.userName || userId;
+      const ws = config.workspacePath;
+      const result = change_id
+        ? await changeTracker.rollbackToChange({ workspaceId: ws, workspacePath: ws, changeId: change_id, userId, userName })
+        : snapshot_id
+          ? await changeTracker.rollbackToSnapshot({ workspaceId: ws, workspacePath: ws, filePath: path, snapshotId: snapshot_id, userId, userName })
+          : await changeTracker.rollbackToLatest({ workspaceId: ws, workspacePath: ws, filePath: path, userId, userName });
+      return {
+        content: [{ type: "text" as const, text: `Rolled back ${result.filePath} to the version from ${result.restoredFrom}. Reversible — previous state was snapshotted first.` }],
+      };
+    }
+  );
+
+  mcpServer.tool(
+    "opencoop_guide",
+    "START HERE — call FIRST in every new conversation BEFORE any file work. Explains the shared project and behavior rules.",
+    {},
+    async () => {
+      const { buildGuideText } = await import("./utils/guide.js");
+      return {
+        content: [{ type: "text" as const, text: buildGuideText({ mode: config.mode, workspacePath: config.workspacePath, userName: config.userName }) }],
       };
     }
   );

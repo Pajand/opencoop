@@ -17,6 +17,7 @@ import { initDatabase, startAutoSave, stopAutoSave } from "../utils/database.js"
 import { createWebUI } from "../web/server.js";
 import { TunnelManager } from "../utils/tunnel.js";
 import { proxyForward, closeProxy } from "./host-proxy.js";
+import { buildGuideText } from "../utils/guide.js";
 
 export class OpenCOOPServer {
   private config: ServerConfig;
@@ -84,6 +85,7 @@ export class OpenCOOPServer {
     this.registerFileTools(server);
     this.registerLockTools(server);
     this.registerMonitoringTools(server);
+    this.registerSafetyTools(server);
     this.registerTeamTools(server);
 
     return server;
@@ -108,6 +110,9 @@ export class OpenCOOPServer {
       { name: "invite_member", description: "Generate an invite link for a new team member.", inputSchema: { type: "object", properties: { email: { type: "string" }, permissions: { type: "array", items: { type: "string", enum: ["read", "write", "admin"] } }, expires_in_days: { type: "number" } }, required: ["email", "permissions"] } },
       { name: "list_members", description: "List all team members and their permissions.", inputSchema: { type: "object", properties: {} } },
       { name: "revoke_access", description: "Revoke a team member's access.", inputSchema: { type: "object", properties: { user_id: { type: "string" }, reason: { type: "string" } }, required: ["user_id"] } },
+      { name: "list_snapshots", description: "List saved previous versions of a shared-project file. Use before rollback_file to pick a version.", inputSchema: { type: "object", properties: { file_path: { type: "string" }, limit: { type: "number" } } } },
+      { name: "rollback_file", description: "Undo a mistake: restore a shared-project file to a previous version. Just pass path to undo the last change.", inputSchema: { type: "object", properties: { path: { type: "string" }, snapshot_id: { type: "string" }, change_id: { type: "string" } }, required: ["path"] } },
+      { name: "opencoop_guide", description: "START HERE — call FIRST in every new conversation before any file work. Explains the shared project, the confirmation question to ask the user, and all behavior rules.", inputSchema: { type: "object", properties: {} } },
     ];
   }
 
@@ -122,16 +127,30 @@ export class OpenCOOPServer {
         case "read_file":
           return await this.fileManager.readFile(args.path, { startLine: args.start_line, endLine: args.end_line });
         case "write_file":
+          await this.changeTracker.snapshotBeforeChange(this.config.workspacePath, args.path, userName);
           await this.fileManager.writeFile(args.path, args.content, { createDirs: args.create_dirs });
           await this.changeTracker.logChange({ workspaceId: this.config.workspacePath, filePath: args.path, userId, userName, action: "update", newContentHash: await this.fileManager.hash(args.path) });
-          return `File written successfully: ${args.path}`;
+          return `File written successfully: ${args.path} (previous version snapshotted — use rollback_file to undo if needed)`;
         case "edit_file": {
           const oldHash = await this.fileManager.hash(args.path);
+          await this.changeTracker.snapshotBeforeChange(this.config.workspacePath, args.path, userName);
           const result = await this.fileManager.editFile(args.path, args.search, args.replace, { replaceAll: args.replace_all });
           const newHash = await this.fileManager.hash(args.path);
           await this.changeTracker.logChange({ workspaceId: this.config.workspacePath, filePath: args.path, userId, userName, action: "update", oldContentHash: oldHash, newContentHash: newHash, metadata: JSON.stringify({ changes: result.changes }) });
-          return `Edit applied: ${result.changes} occurrence(s) replaced in ${args.path}`;
+          return `Edit applied: ${result.changes} occurrence(s) replaced in ${args.path} (previous version snapshotted — use rollback_file to undo if needed)`;
         }
+        case "list_snapshots":
+          return JSON.stringify(await this.changeTracker.getSnapshots({ workspaceId: this.config.workspacePath, filePath: args.file_path, limit: args.limit || 20 }), null, 2);
+        case "rollback_file": {
+          const result = args.change_id
+            ? await this.changeTracker.rollbackToChange({ workspaceId: this.config.workspacePath, workspacePath: this.config.workspacePath, changeId: args.change_id, userId, userName })
+            : args.snapshot_id
+              ? await this.changeTracker.rollbackToSnapshot({ workspaceId: this.config.workspacePath, workspacePath: this.config.workspacePath, filePath: args.path, snapshotId: args.snapshot_id, userId, userName })
+              : await this.changeTracker.rollbackToLatest({ workspaceId: this.config.workspacePath, workspacePath: this.config.workspacePath, filePath: args.path, userId, userName });
+          return `Rolled back ${result.filePath} to the version from ${result.restoredFrom}. Your previous (broken) state was snapshotted first, so this rollback is itself reversible. Now retry your task correctly.`;
+        }
+        case "opencoop_guide":
+          return buildGuideText({ mode: this.config.mode, workspacePath: this.config.workspacePath, userName: this.config.userName });
         case "list_files":
           return JSON.stringify(await this.fileManager.listFiles(args.path || ".", { recursive: args.recursive }), null, 2);
         case "search_files":
@@ -178,11 +197,14 @@ export class OpenCOOPServer {
   }
 
   private registerFileTools(server: McpServer) {
+    const ws = this.config.workspacePath;
+    const PRIORITY = `SHARED PROJECT (${ws}). If the user confirmed working in the shared project, ALWAYS use this tool for these files — NEVER local Read/Write/Edit tools and NEVER Bash (cat/echo/sed/redirects). Bash bypasses tracking and snapshots, so Bash mistakes CANNOT be undone. Paths are relative to the workspace root.`;
+
     server.tool(
       "read_file",
-      "Read the contents of a file in the shared project. Use this to view code, configs, or any text file.",
+      `Read a file from the shared team project. ${PRIORITY}`,
       {
-        path: z.string().describe("Relative file path from project root"),
+        path: z.string().describe("Relative file path from project root, e.g. 'src/app.ts'"),
         start_line: z.number().optional().describe("Start line number (1-based)"),
         end_line: z.number().optional().describe("End line number (1-based)"),
         _opencoop_user: z.string().optional().describe("Remote user's display name (injected by proxy)"),
@@ -209,9 +231,9 @@ export class OpenCOOPServer {
 
     server.tool(
       "write_file",
-      "Create or overwrite a file in the shared project. This will be tracked in the audit log.",
+      `Create or overwrite a file in the shared team project. ${PRIORITY} Every write AUTOMATICALLY snapshots the previous version (tracked in the audit log). If you break a file, fix it yourself with rollback_file — do not wait for the human.`,
       {
-        path: z.string().describe("Relative file path from project root"),
+        path: z.string().describe("Relative file path from project root, e.g. 'src/app.ts'"),
         content: z.string().describe("Full file content to write"),
         create_dirs: z.boolean().optional().describe("Create parent directories if they do not exist"),
         _opencoop_user: z.string().optional().describe("Remote user's display name (injected by proxy)"),
@@ -221,6 +243,7 @@ export class OpenCOOPServer {
         const userName = this.resolveUserName({ _opencoop_user }, userId);
         let oldContent = "";
         try { oldContent = await this.fileManager.readFile(path); } catch {}
+        await this.changeTracker.snapshotBeforeChange(this.config.workspacePath, path, userName);
         await this.fileManager.writeFile(path, content, { createDirs: create_dirs });
         const diff = this.computeDiff(oldContent, content);
         await this.changeTracker.logChange({
@@ -234,17 +257,17 @@ export class OpenCOOPServer {
           metadata: diff ? JSON.stringify({ diff }) : undefined,
         });
         return {
-          content: [{ type: "text" as const, text: `File written successfully: ${path}` }],
+          content: [{ type: "text" as const, text: `File written successfully: ${path} (previous version snapshotted — use rollback_file to undo if needed)` }],
         };
       }
     );
 
     server.tool(
       "edit_file",
-      "Make a targeted edit to a file using search and replace. Preferred over write_file for modifying existing files.",
+      `Make a targeted edit to a file in the shared team project. ${PRIORITY} PREFER this over write_file for modifying existing files (smaller edits = fewer conflicts with teammates). The previous version is snapshotted automatically — if you break the file, rollback_file undoes it.`,
       {
-        path: z.string().describe("Relative file path"),
-        search: z.string().describe("Exact text to find (must be unique in file)"),
+        path: z.string().describe("Relative file path from project root"),
+        search: z.string().describe("Exact text to find (must match the file exactly, including whitespace)"),
         replace: z.string().describe("Text to replace with"),
         replace_all: z.boolean().optional().describe("Replace all occurrences (default: false)"),
         _opencoop_user: z.string().optional().describe("Remote user's display name (injected by proxy)"),
@@ -254,6 +277,7 @@ export class OpenCOOPServer {
         const userName = this.resolveUserName({ _opencoop_user }, userId);
         const oldContent = await this.fileManager.readFile(path);
         const oldHash = await this.fileManager.hash(path);
+        await this.changeTracker.snapshotBeforeChange(this.config.workspacePath, path, userName);
         const result = await this.fileManager.editFile(path, search, replace, {
           replaceAll: replace_all,
         });
@@ -481,8 +505,77 @@ export class OpenCOOPServer {
     );
   }
 
-  private registerTeamTools(server: McpServer) {
+  private registerSafetyTools(server: McpServer) {
     server.tool(
+      "opencoop_guide",
+      "START HERE — call this tool FIRST at the beginning of every new conversation, BEFORE any file work. It tells you about the shared team project (where it is, host or remote mode), the EXACT confirmation question you MUST ask the user, and all behavior rules (tool priority, teamwork, self-healing with rollback). If you feel lost at any point, call it again.",
+      {},
+      async () => {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: buildGuideText({
+                mode: this.config.mode,
+                workspacePath: this.config.workspacePath,
+                userName: this.config.userName,
+              }),
+            },
+          ],
+        };
+      }
+    );
+
+    server.tool(
+      "list_snapshots",
+      "List saved previous versions of a file in the shared project. WHEN: (1) before rollback_file when you want to pick a specific older version, (2) to answer 'what versions exist / what changed'. Each entry shows snapshot_id, timestamp, author, and size. Snapshots are created automatically on every write/edit.",
+      {
+        file_path: z.string().optional().describe("File to list versions for (relative path). Omit to see recent snapshots across the project."),
+        limit: z.number().optional().describe("Max entries (default: 20)"),
+      },
+      async ({ file_path, limit }) => {
+        const snaps = await this.changeTracker.getSnapshots({
+          workspaceId: this.config.workspacePath,
+          filePath: file_path,
+          limit: limit || 20,
+        });
+        return {
+          content: [{ type: "text" as const, text: JSON.stringify(snaps, null, 2) }],
+        };
+      }
+    );
+
+    server.tool(
+      "rollback_file",
+      "UNDO YOUR MISTAKE: restore a shared-project file to a previous version. WHEN TO USE: (1) you broke a file with write_file/edit_file, (2) the result looks wrong after your change, (3) tests fail because of your edit, (4) the user says undo / revert / restore / rollback / 'bring it back'. HOW: pass ONLY 'path' to undo the last change — nothing else needed. To restore a SPECIFIC older version, first call list_snapshots, then pass path + snapshot_id. SAFE: rollback snapshots the current state first, so even a wrong rollback can be rolled back. After rollback, TELL the user what you restored and retry the task correctly. NEVER reconstruct a broken file from memory when a snapshot exists.",
+      {
+        path: z.string().describe("Relative file path to restore (e.g. 'src/app.ts')"),
+        snapshot_id: z.string().optional().describe("Specific version to restore (from list_snapshots). Omit to undo the last change."),
+        change_id: z.string().optional().describe("Restore to how the file looked BEFORE this change-log entry (from view_changes). Omit to undo the last change."),
+        _opencoop_user: z.string().optional().describe("Remote user's display name (injected by proxy)"),
+      },
+      async ({ path, snapshot_id, change_id, _opencoop_user }) => {
+        const userId = "user-" + randomUUID().slice(0, 8);
+        const userName = this.resolveUserName({ _opencoop_user }, userId);
+        const ws = this.config.workspacePath;
+        const result = change_id
+          ? await this.changeTracker.rollbackToChange({ workspaceId: ws, workspacePath: ws, changeId: change_id, userId, userName })
+          : snapshot_id
+            ? await this.changeTracker.rollbackToSnapshot({ workspaceId: ws, workspacePath: ws, filePath: path, snapshotId: snapshot_id, userId, userName })
+            : await this.changeTracker.rollbackToLatest({ workspaceId: ws, workspacePath: ws, filePath: path, userId, userName });
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `Rolled back ${result.filePath} to the version from ${result.restoredFrom}. Your previous state was snapshotted first, so this rollback is itself reversible. Now retry your task correctly and tell the user what happened.`,
+            },
+          ],
+        };
+      }
+    );
+  }
+
+  private registerTeamTools(server: McpServer) {    server.tool(
       "invite_member",
       "Generate an invite link for a new team member. Only the project owner can use this.",
       {

@@ -8,6 +8,13 @@ import { ChangeTracker } from "../filesystem/change-tracker.js";
 import { SessionManager } from "../auth/session-manager.js";
 import { LockManager } from "../filesystem/lock-manager.js";
 import { initDatabase, getAllRows, getRow } from "../utils/database.js";
+import { buildGuideText } from "../utils/guide.js";
+import {
+  getProjectId,
+  getProjectMembers,
+  getSnapshotsDiskUsage,
+  recordProjectMember,
+} from "../filesystem/project-store.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -47,6 +54,8 @@ export async function createWebUI(
       const rawIp = req.ip || req.socket.remoteAddress || "unknown";
       const ip = rawIp.replace(/^::ffff:/, "");
       userSessions.set(ip, { userName, lastSeen: Date.now() });
+      // Persist as a known project contributor (survives restart).
+      recordProjectMember(config.workspacePath, userName);
       res.json({ success: true, ip });
     } catch {
       res.status(500).json({ error: "Failed to register user" });
@@ -129,6 +138,105 @@ export async function createWebUI(
     }
   });
 
+  // ==================== SNAPSHOTS + ROLLBACK API ====================
+  app.get("/api/snapshots", async (req, res) => {
+    try {
+      const { file, limit } = req.query;
+      const snaps = await changeTracker.getSnapshots({
+        workspaceId: config.workspacePath,
+        filePath: (file as string | undefined) || undefined,
+        limit: limit ? parseInt(limit as string) : 20,
+      });
+      res.json({ snapshots: snaps });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch snapshots" });
+    }
+  });
+
+  app.post("/api/rollback", async (req, res) => {
+    try {
+      const { path: filePath, snapshot_id, change_id } = req.body;
+      const rawIp = req.ip || req.socket.remoteAddress || "unknown";
+      const ip = rawIp.replace(/^::ffff:/, "");
+      const session = userSessions.get(ip);
+      const userName = session?.userName || config.userName || "web-admin";
+      const ws = config.workspacePath;
+
+      if (!filePath && !change_id) {
+        return res.status(400).json({ error: "path or change_id required" });
+      }
+
+      const result = change_id
+        ? await changeTracker.rollbackToChange({
+            workspaceId: ws,
+            workspacePath: ws,
+            changeId: change_id,
+            userId: "web-" + ip,
+            userName,
+          })
+        : snapshot_id
+          ? await changeTracker.rollbackToSnapshot({
+              workspaceId: ws,
+              workspacePath: ws,
+              filePath,
+              snapshotId: snapshot_id,
+              userId: "web-" + ip,
+              userName,
+            })
+          : await changeTracker.rollbackToLatest({
+              workspaceId: ws,
+              workspacePath: ws,
+              filePath,
+              userId: "web-" + ip,
+              userName,
+            });
+
+      res.json({ success: true, ...result });
+    } catch (error) {
+      res.status(400).json({
+        success: false,
+        error: error instanceof Error ? error.message : "Rollback failed",
+      });
+    }
+  });
+
+  // ==================== PROJECT INFO API ====================
+  // Everything stored in <workspace>/.opencoop/ — travels with the project.
+  app.get("/api/project", async (req, res) => {
+    try {
+      const members = getProjectMembers(config.workspacePath);
+      const usage = getSnapshotsDiskUsage(config.workspacePath);
+      const snapshotRows = await changeTracker.getSnapshots({
+        workspaceId: config.workspacePath,
+        limit: 1,
+      });
+      res.json({
+        projectId: getProjectId(config.workspacePath),
+        workspacePath: config.workspacePath,
+        mode: config.mode,
+        members,
+        snapshots: {
+          files: usage.fileCount,
+          totalBytes: usage.totalBytes,
+        },
+      });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch project info" });
+    }
+  });
+
+  // ==================== GUIDE API ====================
+  // Same content the AI receives via the opencoop_guide MCP tool.
+  app.get("/api/guide", (_req, res) => {
+    res.json({
+      guide: buildGuideText({
+        mode: config.mode,
+        workspacePath: config.workspacePath,
+        userName: config.userName,
+      }),
+    });
+  });
+
   // ==================== STATS API ====================
   app.get("/api/stats", async (req, res) => {
     try {
@@ -174,10 +282,27 @@ export async function createWebUI(
         source: "host",
       };
 
+      // Previous contributors persisted in <workspace>/.opencoop/config.json
+      // (survive restart; reappear when the same folder is re-selected).
+      const knownNames = new Set(
+        [hostMember.email, ...members.map((m: any) => m.email), ...webUsers.map((u) => u.email.replace(/ \(web\)$/, ""))]
+      );
+      const pastContributors = getProjectMembers(config.workspacePath)
+        .filter((m) => !knownNames.has(m.name))
+        .map((m) => ({
+          userId: `past-${m.name}`,
+          email: m.name,
+          permissions: "read,write",
+          role: "contributor",
+          connectedAt: new Date(m.lastSeen).getTime(),
+          changeCount: m.changeCount,
+          source: "history",
+        }));
+
       const allMembers = [hostMember, ...members.map((m: any) => ({
         ...m,
         source: "invite",
-      })), ...webUsers];
+      })), ...webUsers, ...pastContributors];
 
       res.json({ members: allMembers, online });
     } catch (error) {
@@ -253,7 +378,7 @@ export async function createWebUI(
       mode: config.mode,
       workspace: config.workspacePath,
       port: config.port,
-      version: "1.13.3",
+      version: "1.14.0",
       uptime: process.uptime(),
     });
   });
