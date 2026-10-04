@@ -47,6 +47,6 @@ OpenCOOP distinguishes **trusted local** traffic from **remote** traffic:
 We thank the following researchers for responsibly disclosing issues:
 
 - **Christian Terorde (0xwaidwerk)** — reported the unauthenticated MCP transport
-  vulnerability (host mode) fixed in **v1.15.0** (unauthenticated read/write via
+  vulnerability (host mode) fixed in **v1.15.1** (unauthenticated read/write via
   `/mcp`, missing permission enforcement, and 0.0.0.0 binding). Thank you for the
   clear reproduction and the constructive remediation guidance!

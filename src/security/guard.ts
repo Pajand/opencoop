@@ -143,10 +143,22 @@ export class SecurityManager {
     }
 
     if (!this.config.adminToken) {
-      this.config.adminToken = crypto.randomBytes(32).toString("hex");
+      // DETERMINISTIC derivation: OpenCode creates several plugin instances
+      // (one per workspace) in parallel; a random token would race and the
+      // config could end up holding a different value than the running
+      // server. Deriving it from the (stable, on-disk) jwtSecret means every
+      // instance computes the SAME token.
+      this.config.adminToken = this.deriveAdminToken();
     }
 
     this.initSecurityTables();
+  }
+
+  private deriveAdminToken(): string {
+    return crypto
+      .createHash("sha256")
+      .update(`opencoop-admin-v1:${this.config.jwtSecret}:${this.config.workspacePath}`)
+      .digest("hex");
   }
 
   // ==================== Tokens ====================

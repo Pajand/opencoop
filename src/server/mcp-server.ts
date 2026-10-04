@@ -752,10 +752,21 @@ export class OpenCOOPServer {
   }
 
   async startHttp(port: number): Promise<void> {
+    // Refresh security-critical fields from disk BEFORE initializing managers.
+    // Several plugin instances start in parallel (one per workspace); only the
+    // one that wins the port must own the persisted jwtSecret/adminToken.
+    let diskCfg: ServerConfig | null = null;
+    try {
+      diskCfg = await loadConfig();
+    } catch {}
+    if (diskCfg) {
+      if (diskCfg.jwtSecret) this.config.jwtSecret = diskCfg.jwtSecret;
+      if (diskCfg.adminToken) this.config.adminToken = diskCfg.adminToken;
+    }
+
     await this.initialize();
 
     // ==================== SECURITY (v1.15.0) ====================
-    // adminToken is generated once and persisted to the global config.
     const hadAdminToken = !!this.config.adminToken;
     const extraHosts: string[] = [];
     for (const u of [this.config.hostUrl]) {
@@ -772,9 +783,8 @@ export class OpenCOOPServer {
       extraAllowedHosts: extraHosts,
     });
     if (!hadAdminToken) {
-      try {
-        await saveConfig(this.config);
-      } catch {}
+      // NOTE: persistence happens AFTER we win the port (see listen callback).
+      // A losing instance must not overwrite the winner's config.
     }
 
     const app = express();
@@ -1175,6 +1185,18 @@ export class OpenCOOPServer {
         logger.info(`OpenCOOP server listening on ${bindAddress}:${port}`);
         console.log(`[OpenCOOP] Security: local connections trusted; remote requires a token`);
         console.log(`[OpenCOOP] Admin token: ${this.security!.getAdminToken()}`);
+
+        // Only the instance that won the port persists security-critical
+        // config, preventing multi-instance races.
+        try {
+          const current = await loadConfig();
+          if (
+            current.jwtSecret !== this.config.jwtSecret ||
+            current.adminToken !== this.config.adminToken
+          ) {
+            await saveConfig(this.config);
+          }
+        } catch {}
 
         // Start tunnel AFTER server is listening (through the edge proxy)
         if (this.config.mode === "host") {
