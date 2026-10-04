@@ -1,7 +1,8 @@
 import express from "express";
 import path from "path";
 import { fileURLToPath } from "url";
-import { ServerConfig } from "../types/index.js";
+import { randomUUID } from "crypto";
+import { ServerConfig, AuthIdentity } from "../types/index.js";
 import { saveConfig, normalizeHostUrl } from "../utils/config.js";
 import { AuthManager } from "../auth/auth-manager.js";
 import { ChangeTracker } from "../filesystem/change-tracker.js";
@@ -9,6 +10,7 @@ import { SessionManager } from "../auth/session-manager.js";
 import { LockManager } from "../filesystem/lock-manager.js";
 import { initDatabase, getAllRows, getRow } from "../utils/database.js";
 import { buildGuideText } from "../utils/guide.js";
+import { SecurityManager } from "../security/guard.js";
 import {
   getProjectId,
   getProjectMembers,
@@ -33,7 +35,8 @@ export function getActiveUserName(clientIp: string | undefined): string | undefi
 export async function createWebUI(
   config: ServerConfig,
   getTunnelUrl?: () => string | null,
-  ensureTunnel?: () => Promise<string | null>
+  ensureTunnel?: () => Promise<string | null>,
+  security?: SecurityManager
 ): Promise<express.Express> {
   const app = express();
   app.use(express.json());
@@ -43,6 +46,35 @@ export async function createWebUI(
   const changeTracker = new ChangeTracker();
   const sessionManager = new SessionManager();
   const lockManager = new LockManager();
+
+  // Identity helper: when no SecurityManager is present (stdio CLI path),
+  // everything is local/trusted.
+  const identityOf = (req: express.Request): AuthIdentity => {
+    return (
+      (security?.getIdentity(req) as AuthIdentity | null) || {
+        type: "local",
+        userId: "local-host",
+        userName: config.userName || "Host",
+        permissions: ["read", "write", "admin"],
+      }
+    );
+  };
+  /** Middleware array (empty when no SecurityManager) for a permission gate. */
+  const permMw = (perm: string): express.RequestHandler[] =>
+    security ? [security.requirePermission(perm)] : [];
+
+  // ==================== IDENTITY API ====================
+  app.get("/api/me", (req, res) => {
+    const identity = identityOf(req);
+    res.json({
+      type: identity.type,
+      userName: identity.userName,
+      userId: identity.userId,
+      permissions: identity.permissions,
+      isAdmin: identity.permissions.includes("admin"),
+      canWrite: identity.permissions.includes("admin") || identity.permissions.includes("write"),
+    });
+  });
 
   // ==================== USER SESSION TRACKING ====================
   // When a remote user sets their display name, register their IP.
@@ -72,30 +104,64 @@ export async function createWebUI(
 
   // ==================== CONFIG API ====================
   app.get("/api/config", (req, res) => {
-    res.json({
+    const identity = identityOf(req);
+    const isPrivileged = identity.permissions.includes("admin");
+    const data: Record<string, unknown> = {
       mode: config.mode,
       workspacePath: config.workspacePath,
       hostUrl: config.hostUrl,
       port: config.port,
       userName: config.userName || "",
-    });
+      bindAddress: config.bindAddress || "127.0.0.1",
+      memberName: config.memberName || "",
+      memberPermissions: config.memberPermissions || "",
+      hasMemberToken: !!config.memberToken,
+      isRemote: !!config.memberToken,
+    };
+    // The admin secret never leaves the local/admin context.
+    if (isPrivileged) {
+      data.adminToken = config.adminToken || "";
+    }
+    res.json(data);
+  });
+
+  app.post("/api/config", (req, res, next) => {
+    // Only local host sessions or a valid admin token may change server config.
+    const identity = identityOf(req);
+    if (!identity.permissions.includes("admin")) {
+      if (security) {
+        security.logEvent(
+          (req.ip || "").replace(/^::ffff:/, ""),
+          "config_change_denied",
+          identity.type,
+          req.originalUrl
+        );
+        return res.status(403).json({
+          success: false,
+          error: "Forbidden: only the host (local or admin) can change configuration",
+          code: "PERMISSION_DENIED",
+        });
+      }
+    }
+    next();
   });
 
   app.post("/api/config", async (req, res) => {
     try {
+      const identity = identityOf(req);
+      const isPrivileged = identity.permissions.includes("admin");
       const { mode, workspacePath, hostUrl, userName } = req.body;
       if (mode) config.mode = mode;
-      if (workspacePath) config.workspacePath = workspacePath;
-      if (hostUrl !== undefined) config.hostUrl = normalizeHostUrl(hostUrl);
-      // Only save userName to host config if explicitly provided AND no remote
-      // user is identified. Remote users register via /api/user/register instead.
-      // This prevents remote users from overwriting the host's display name.
-      if (userName !== undefined) {
+      if (workspacePath && isPrivileged) config.workspacePath = workspacePath;
+      if (hostUrl !== undefined && isPrivileged) config.hostUrl = normalizeHostUrl(hostUrl);
+      // Display name: only the host can rename the host. Remote members
+      // register their own name via /api/user/register (per-browser identity).
+      if (userName !== undefined && isPrivileged) {
         config.userName = userName;
       }
       await saveConfig(config);
       // Also register the user in the session map
-      if (userName) {
+      if (userName && isPrivileged) {
         const rawIp = req.ip || req.socket.remoteAddress || "unknown";
         const ip = rawIp.replace(/^::ffff:/, "");
         userSessions.set(ip, { userName, lastSeen: Date.now() });
@@ -153,13 +219,16 @@ export async function createWebUI(
     }
   });
 
-  app.post("/api/rollback", async (req, res) => {
+  app.post(
+    "/api/rollback",
+    ...permMw("write"),
+    async (req, res) => {
     try {
       const { path: filePath, snapshot_id, change_id } = req.body;
+      const identity = identityOf(req);
       const rawIp = req.ip || req.socket.remoteAddress || "unknown";
       const ip = rawIp.replace(/^::ffff:/, "");
-      const session = userSessions.get(ip);
-      const userName = session?.userName || config.userName || "web-admin";
+      const userName = identity.userName || config.userName || "web-admin";
       const ws = config.workspacePath;
 
       if (!filePath && !change_id) {
@@ -282,7 +351,7 @@ export async function createWebUI(
         source: "host",
       };
 
-      // Previous contributors persisted in <workspace>/.opencoop/config.json
+      // Previous contributors persisted in <workspace>/.opencoop/project.json
       // (survive restart; reappear when the same folder is re-selected).
       const knownNames = new Set(
         [hostMember.email, ...members.map((m: any) => m.email), ...webUsers.map((u) => u.email.replace(/ \(web\)$/, ""))]
@@ -311,10 +380,14 @@ export async function createWebUI(
   });
 
   // ==================== INVITE API ====================
-  app.post("/api/invite", async (req, res) => {
+  app.post(
+    "/api/invite",
+    ...permMw("admin"),
+    async (req, res) => {
     try {
       const { email, permissions, expires_in_days } = req.body;
-      const ownerId = "owner-web";
+      const identity = identityOf(req);
+      const ownerId = identity.userId || "owner-web";
       const link = await authManager.generateInviteLink({
         workspaceId: config.workspacePath,
         email: email || "team@opencoop.local",
@@ -324,6 +397,12 @@ export async function createWebUI(
         port: config.port,
         tunnelUrl: getTunnelUrl?.() || undefined,
       });
+      security?.logEvent(
+        (req.ip || "").replace(/^::ffff:/, ""),
+        "invite_created",
+        `${email || "team"} [${(permissions || ["read", "write"]).join(",")}]`,
+        "/ui/api/invite"
+      );
       res.json({ success: true, invite: link });
     } catch (error) {
       res.status(500).json({ error: "Failed to create invite" });
@@ -338,6 +417,144 @@ export async function createWebUI(
       res.status(500).json({ error: "Failed to validate invite" });
     }
   });
+
+  // ==================== INVITE REDEMPTION (PUBLIC BOOTSTRAP) ====================
+  // The invite token IS the credential here. Rate-limited; issues a member
+  // session token used for all subsequent MCP/UI requests.
+  app.post("/api/invite/redeem", async (req, res) => {
+    try {
+      const ip = (req.ip || req.socket.remoteAddress || "unknown").replace(/^::ffff:/, "");
+      if (security && !security.checkRate(`redeem:${ip}`, 10)) {
+        security.logEvent(ip, "redeem_rate_limited", "", "/ui/api/invite/redeem");
+        return res.status(429).json({ success: false, error: "Too many attempts. Try again later." });
+      }
+
+      const { token, userName, email } = req.body || {};
+      if (!token) return res.status(400).json({ success: false, error: "token required" });
+
+      const check = await authManager.validateInviteLink(token);
+      if (!check.valid) {
+        security?.logEvent(ip, "redeem_invalid", check.reason || "", "/ui/api/invite/redeem");
+        return res.status(401).json({ success: false, error: check.reason || "Invalid invite" });
+      }
+
+      const name = String(userName || "").trim().slice(0, 50) || "member";
+      const userId = "member-" + randomUUID().slice(0, 12);
+
+      // Register the user + membership (single-use increments handled inside).
+      await authManager.acceptInvite(token, userId, {
+        name,
+        email: email ? String(email).slice(0, 120) : undefined,
+      });
+
+      if (!security) return res.status(500).json({ success: false, error: "Security not initialized" });
+
+      const permissions = check.permissions || ["read"];
+      const sessionToken = security.issueMemberToken({
+        userId,
+        name,
+        email,
+        permissions,
+        workspaceId: config.workspacePath,
+      });
+
+      security.logEvent(ip, "redeem_success", `${name} [${permissions.join(",")}]`, "/ui/api/invite/redeem");
+      res.json({
+        success: true,
+        sessionToken,
+        member: { userId, name, permissions, workspaceId: config.workspacePath },
+        expiresInDays: 30,
+      });
+    } catch (error) {
+      res.status(400).json({
+        success: false,
+        error: error instanceof Error ? error.message : "Redemption failed",
+      });
+    }
+  });
+
+  // ==================== REMOTE CONNECT (runs on the GUEST machine) ====================
+  // The guest pastes the host invite link; this local server redeems it
+  // server-side and stores hostUrl + member token. No browser CORS involved.
+  app.post("/api/connect", async (req, res) => {
+    try {
+      const identity = identityOf(req);
+      if (identity.type !== "local" && !identity.permissions.includes("admin")) {
+        return res.status(403).json({ success: false, error: "Only the local user can connect to a host" });
+      }
+      const { inviteUrl, userName } = req.body || {};
+      if (!inviteUrl || typeof inviteUrl !== "string") {
+        return res.status(400).json({ success: false, error: "inviteUrl required" });
+      }
+
+      let base: string;
+      let token: string;
+      try {
+        const u = new URL(inviteUrl.trim());
+        const m = u.pathname.match(/\/invite\/([^/]+)/);
+        if (!m) throw new Error("no invite token in URL");
+        token = m[1];
+        base = u.origin;
+      } catch (err) {
+        return res.status(400).json({
+          success: false,
+          error: "Invalid invite link. Paste the FULL link, e.g. https://xxx.tinyfi.sh/ui/invite/abc123",
+        });
+      }
+
+      const resp = await fetch(`${base}/ui/api/invite/redeem`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-opencoop-client": "web",
+        },
+        body: JSON.stringify({
+          token,
+          userName: userName || config.userName || "member",
+        }),
+      });
+      const data: any = await resp.json().catch(() => ({}));
+      if (!resp.ok || !data.success) {
+        return res.status(401).json({
+          success: false,
+          error: data.error || `Host rejected the invite (HTTP ${resp.status})`,
+        });
+      }
+
+      config.mode = "remote";
+      config.hostUrl = base;
+      config.memberToken = data.sessionToken;
+      config.memberName = data.member?.name || "";
+      config.memberPermissions = (data.member?.permissions || []).join(",");
+      config.workspacePath = config.workspacePath || config.workspacePath;
+      await saveConfig(config);
+
+      res.json({
+        success: true,
+        hostUrl: base,
+        member: data.member,
+        expiresInDays: data.expiresInDays,
+      });
+    } catch (error) {
+      res.status(502).json({
+        success: false,
+        error: `Could not reach host: ${error instanceof Error ? error.message : "unknown error"}`,
+      });
+    }
+  });
+
+  // ==================== SECURITY EVENTS API (admin only) ====================
+  app.get(
+    "/api/security/events",
+    ...permMw("admin"),
+    (req, res) => {
+      const limit = req.query.limit ? parseInt(req.query.limit as string) : 100;
+      res.json({
+        events: security?.getRecentEvents(limit) || [],
+        adminToken: identityOf(req).permissions.includes("admin") ? config.adminToken : undefined,
+      });
+    }
+  );
 
   // ==================== LOCKS API ====================
   app.get("/api/locks", async (req, res) => {
@@ -385,7 +602,7 @@ export async function createWebUI(
       mode: config.mode,
       workspace: config.workspacePath,
       port: config.port,
-      version: "1.14.2",
+      version: "1.15.0",
       uptime: process.uptime(),
     });
   });

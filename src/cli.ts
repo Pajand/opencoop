@@ -14,6 +14,8 @@ import { logger } from "./utils/logger.js";
 import { loadConfig } from "./utils/config.js";
 import { initDatabase, startAutoSave } from "./utils/database.js";
 import { createWebUI } from "./web/server.js";
+import { SecurityManager } from "./security/guard.js";
+import { randomBytes } from "crypto";
 import express from "express";
 import cors from "cors";
 import net from "net";
@@ -435,7 +437,40 @@ async function main() {
   if (!portInUse) {
     const app = express();
     app.use(express.json());
-    app.use(cors({ origin: true }));
+
+    // ==================== SECURITY (v1.15.0) ====================
+    const hadAdminToken = !!config.adminToken;
+    const security = new SecurityManager({
+      config,
+      tunnelSecret: randomBytes(32).toString("hex"),
+      lookupMember: (userId) => authManager.getMemberById(config.workspacePath, userId),
+    });
+    if (!hadAdminToken) {
+      const { saveConfig } = await import("./utils/config.js");
+      try { await saveConfig(config); } catch {}
+    }
+
+    app.use(security.securityHeaders);
+    app.use(security.contextMiddleware);
+    app.use(
+      cors((req: any, callback: (err: Error | null, options?: any) => void) => {
+        const allowed = security.corsOrigin(req.headers.origin, req.headers.host);
+        callback(null, { origin: allowed });
+      })
+    );
+    app.use((req: any, res: any, next: any) => {
+      const p = req.path;
+      const m = req.method;
+      const isPublic =
+        m === "OPTIONS" ||
+        (m === "GET" && (p === "/health" || p === "/" || p === "/ui" || p === "/ui/" || p.startsWith("/ui/assets/") || p === "/favicon.ico" || /^\/ui\/invite\/[^/]+$/.test(p) || /^\/ui\/api\/invite\/validate\/[^/]+$/.test(p))) ||
+        (m === "POST" && p === "/ui/api/invite/redeem");
+      if (isPublic) return next();
+      security.requireAuth(req, res, next);
+    });
+    app.use((req: any, _res: any, next: any) => {
+      security.runWithIdentity(req.identity ?? null, () => next());
+    });
 
     app.get("/health", (_req, res) => {
       res.json({ status: "ok", version: "1.0.0", transport: "stdio" });
@@ -458,13 +493,14 @@ async function main() {
 
     // Web UI - mounted at /ui (same as plugin server) so the SPA fallback
     // can never shadow MCP/SSE/API routes.
-    const webApp = await createWebUI(config);
+    const webApp = await createWebUI(config, undefined, undefined, security);
     app.use("/ui", webApp);
     app.get("/", (_req, res) => res.redirect("/ui/"));
 
-    app.listen(port, '0.0.0.0', () => {
+    const bindAddress = config.bindAddress || "127.0.0.1";
+    app.listen(port, bindAddress, () => {
       console.error(`[OpenCOOP] Web UI available at http://localhost:${port}/ui/`);
-      logger.info(`Web UI listening on 0.0.0.0:${port}`);
+      logger.info(`Web UI listening on ${bindAddress}:${port}`);
     });
   } else {
     console.error(`[OpenCOOP] Port ${port} already in use - web UI may already be running`);

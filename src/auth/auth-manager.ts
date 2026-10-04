@@ -170,16 +170,41 @@ export class AuthManager {
     };
   }
 
-  async acceptInvite(token: string, userId: string): Promise<void> {
+  async acceptInvite(
+    token: string,
+    userId: string,
+    profile?: { name?: string; email?: string }
+  ): Promise<void> {
     const link = await this.validateInviteLink(token);
     if (!link.valid || !link.workspaceId) {
       throw new Error(link.reason || "Invalid invite link");
     }
 
+    const name = profile?.name?.trim() || "member";
+    const email = profile?.email?.trim() || `${userId}@invite.local`;
+
+    // Register the user profile (unique email conflicts fall back safely).
+    const existing = getRow<{ id: string }>("SELECT id FROM users WHERE id = ?", [userId]);
+    if (existing) {
+      runQuery("UPDATE users SET name = ? WHERE id = ?", [name, userId]);
+    } else {
+      try {
+        runQuery(
+          "INSERT INTO users (id, email, name, role) VALUES (?, ?, ?, 'member')",
+          [userId, email, name]
+        );
+      } catch {
+        runQuery(
+          "INSERT INTO users (id, email, name, role) VALUES (?, ?, ?, 'member')",
+          [userId, `${userId}@invite.local`, name]
+        );
+      }
+    }
+
     runQuery(
       `INSERT OR IGNORE INTO team_members (id, workspace_id, user_id, permissions, accepted_at)
        VALUES (?, ?, ?, ?, datetime('now'))`,
-      [uuidv4(), link.workspaceId, userId, link.permissions?.join(",")]
+      [uuidv4(), link.workspaceId, userId, link.permissions?.join(",") || "read"]
     );
 
     runQuery(
@@ -198,24 +223,61 @@ export class AuthManager {
     );
   }
 
+  /**
+   * Fresh single-member lookup used by the security guard on EVERY request.
+   * A revoked member (row deleted) fails this lookup immediately, so their
+   * token stops working right away — no token blacklist needed.
+   */
+  getMemberById(
+    workspaceId: string,
+    userId: string
+  ): { permissions: string[]; email?: string; name?: string } | null {
+    const row = getRow<{
+      permissions: string | null;
+      email: string | null;
+      name: string | null;
+    }>(
+      `SELECT tm.permissions, u.email, u.name
+       FROM team_members tm
+       LEFT JOIN users u ON tm.user_id = u.id
+       WHERE tm.workspace_id = ? AND tm.user_id = ?`,
+      [workspaceId, userId]
+    );
+    if (!row) return null;
+    return {
+      permissions: (row.permissions || "read")
+        .split(",")
+        .map((p) => p.trim())
+        .filter(Boolean),
+      email: row.email || undefined,
+      name: row.name || undefined,
+    };
+  }
+
+  /**
+   * Revoke a member. Authorization is enforced by the CALLER (the MCP tool
+   * wrapper / API middleware already require admin), so we only need to
+   * remove the membership — which instantly invalidates their token because
+   * the security guard re-reads team_members on every request.
+   */
   async revokeAccess(
     workspaceId: string,
     userId: string,
     ownerId: string
   ): Promise<void> {
-    const workspace = getRow<{ id: string }>(
-      "SELECT id FROM workspaces WHERE id = ? AND owner_id = ?",
-      [workspaceId, ownerId]
-    );
-
-    if (!workspace) {
-      throw new Error("Only the workspace owner can revoke access");
+    const deleted =
+      getScalar<number>(
+        "SELECT COUNT(*) as value FROM team_members WHERE workspace_id = ? AND user_id = ?",
+        [workspaceId, userId]
+      ) || 0;
+    if (!deleted) {
+      throw new Error(`Member not found: ${userId}`);
     }
-
     runQuery(
       "DELETE FROM team_members WHERE workspace_id = ? AND user_id = ?",
       [workspaceId, userId]
     );
+    void ownerId; // Caller identity is enforced upstream (admin permission).
   }
 
   async createWorkspace(params: {

@@ -6,96 +6,6 @@ const API = '/ui';
 let currentPage = 'config';
 let currentConfig = { mode: null, workspacePath: '' };
 let userName = localStorage.getItem('opencoop-user-name') || '';
-let memberToken = localStorage.getItem('opencoop-member-token') || '';
-let currentIdentity = null;
-
-// ============================================
-// Authenticated fetch (v1.15.0 security)
-// ============================================
-// - Adds the member token (after redeeming an invite link) as a Bearer token.
-// - Adds x-opencoop-client: web, required by the server's CSRF guard for
-//   mutations (a custom header cannot be sent cross-origin without preflight).
-// - On 401 the server is telling us we need credentials: show the connect
-//   screen (paste invite link or access token) instead of a broken UI.
-
-async function authFetch(url, options = {}) {
-  const opts = { ...options, headers: { ...(options.headers || {}) } };
-  if (memberToken) opts.headers['Authorization'] = 'Bearer ' + memberToken;
-  opts.headers['x-opencoop-client'] = 'web';
-  const res = await fetch(url, opts);
-  if (res.status === 401) {
-    showConnectScreen();
-  }
-  return res;
-}
-
-function showConnectScreen() {
-  if (document.getElementById('connect-screen')) return;
-  const overlay = document.createElement('div');
-  overlay.id = 'connect-screen';
-  overlay.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(10,10,18,0.96);display:flex;align-items:center;justify-content:center;padding:20px;';
-  overlay.innerHTML = `
-    <div style="max-width:460px;width:100%;background:#171722;border:1px solid #2f2f45;border-radius:16px;padding:32px;color:#e8e8f0;font-family:Inter,system-ui,sans-serif;">
-      <h2 style="margin:0 0 8px;font-size:1.3rem;">Connect to OpenCOOP</h2>
-      <p style="margin:0 0 20px;opacity:0.7;font-size:0.9rem;line-height:1.5;">
-        This server requires authentication.<br>
-        <b>Team members:</b> paste your invite link or access token.<br>
-        <b>Host/admin:</b> paste the admin token from the host machine.
-      </p>
-      <input id="connect-input" type="text" placeholder="https://xxx.tinyfi.sh/ui/invite/... or token"
-        style="width:100%;padding:12px 14px;background:#101018;border:1px solid #2f2f45;border-radius:10px;color:#e8e8f0;outline:none;font-size:0.9rem;box-sizing:border-box;">
-      <div style="display:flex;gap:10px;margin-top:14px;">
-        <input id="connect-name" type="text" placeholder="Your name (for an invite link)"
-          style="flex:1;padding:12px 14px;background:#101018;border:1px solid #2f2f45;border-radius:10px;color:#e8e8f0;outline:none;font-size:0.9rem;">
-        <button id="connect-btn" style="padding:12px 20px;background:linear-gradient(135deg,#8b5cf6,#6366f1);border:none;border-radius:10px;color:white;font-weight:600;cursor:pointer;">Connect</button>
-      </div>
-      <p id="connect-error" style="margin:14px 0 0;color:#ef4444;font-size:0.85rem;min-height:18px;"></p>
-    </div>`;
-  document.body.appendChild(overlay);
-
-  const btn = document.getElementById('connect-btn');
-  const input = document.getElementById('connect-input');
-  const nameInput = document.getElementById('connect-name');
-  if (userName && nameInput) nameInput.value = userName;
-  btn.onclick = () => doConnect();
-  input.addEventListener('keydown', (e) => { if (e.key === 'Enter') doConnect(); });
-
-  async function doConnect() {
-    const value = (input.value || '').trim();
-    const err = document.getElementById('connect-error');
-    err.textContent = '';
-    if (!value) return;
-
-    // Invite link → redeem for a member session token.
-    if (value.includes('/invite/')) {
-      try {
-        const token = value.split('/invite/')[1].split(/[?#]/)[0];
-        const res = await fetch('/ui/api/invite/redeem', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'x-opencoop-client': 'web' },
-          body: JSON.stringify({ token, userName: nameInput.value.trim() || 'member' }),
-        });
-        const data = await res.json();
-        if (!res.ok || !data.success) {
-          err.textContent = data.error || 'Invalid or expired invite link';
-          return;
-        }
-        localStorage.setItem('opencoop-member-token', data.sessionToken);
-        localStorage.setItem('opencoop-member-permissions', (data.member?.permissions || []).join(','));
-        if (nameInput.value.trim()) localStorage.setItem('opencoop-user-name', nameInput.value.trim());
-        location.reload();
-      } catch {
-        err.textContent = 'Could not reach the host';
-      }
-      return;
-    }
-
-    // Bare token (admin or member) → store and reload.
-    localStorage.setItem('opencoop-member-token', value);
-    memberToken = value;
-    location.reload();
-  }
-}
 
 // ============================================
 // Initialization
@@ -106,7 +16,6 @@ document.addEventListener('DOMContentLoaded', () => {
   initThemeToggle();
   initMenuToggle();
   checkStatus();
-  loadMe();
   loadConfig();
 
   // Check if user name is set
@@ -117,51 +26,6 @@ document.addEventListener('DOMContentLoaded', () => {
   // Auto-refresh status
   setInterval(checkStatus, 10000);
 });
-
-// ============================================
-// Identity / Roles (v1.15.0)
-// ============================================
-
-async function loadMe() {
-  try {
-    const res = await authFetch(`${API}/api/me`);
-    if (!res.ok) return;
-    const me = await res.json();
-    currentIdentity = me;
-
-    // Role-aware UI: hide admin-only controls for members, disable write
-    // actions for read-only users.
-    document.body.classList.toggle('role-readonly', !me.canWrite);
-    document.body.classList.toggle('role-member', me.type === 'member');
-    document.body.classList.toggle('role-admin', !!me.isAdmin);
-    document.body.dataset.role = me.type;
-
-    if (me.type === 'member') {
-      // Members never see the host settings/invite controls.
-      ['saveBar'].forEach((id) => {
-        const el = document.getElementById(id);
-        if (el) el.classList.add('hidden');
-      });
-      document.querySelectorAll('[data-admin-only]').forEach((el) => el.classList.add('hidden'));
-      const configNav = document.querySelector('.nav-item[data-page="config"]');
-      if (configNav) configNav.classList.add('hidden');
-      navigateTo('dashboard');
-    }
-
-    const badge = document.getElementById('identity-badge');
-    if (badge) {
-      const permLabel = me.permissions.includes('admin')
-        ? 'admin'
-        : me.permissions.includes('write')
-          ? 'read/write'
-          : 'read-only';
-      badge.textContent = `${me.userName} • ${permLabel}`;
-      badge.classList.remove('hidden');
-    }
-  } catch {
-    // 401 handled by authFetch (connect screen)
-  }
-}
 
 // ============================================
 // Navigation
@@ -299,7 +163,7 @@ function showToast(type, title, message, duration = 4000) {
 async function checkStatus() {
   const el = document.getElementById('connectionStatus');
   try {
-    const res = await authFetch(`${API}/api/status`);
+    const res = await fetch(`${API}/api/status`);
     if (res.ok) {
       el.className = 'connection-status connected';
       el.querySelector('.status-text').textContent = 'Connected';
@@ -319,7 +183,7 @@ async function checkStatus() {
 
 async function loadConfig() {
   try {
-    const res = await authFetch(`${API}/api/config`);
+    const res = await fetch(`${API}/api/config`);
     const data = await res.json();
     currentConfig = data;
 
@@ -366,7 +230,7 @@ async function loadTunnelStatus() {
   const text = document.getElementById('tunnel-text');
   if (!badge || !text) return;
   try {
-    const res = await authFetch('/tunnel-url');
+    const res = await fetch('/tunnel-url');
     if (!res.ok) throw new Error('no endpoint');
     const data = await res.json();
     if (data.url) {
@@ -396,7 +260,7 @@ setInterval(() => {
 async function generateInvite() {
 
   try {
-    const res = await authFetch(`${API}/api/invite`, {
+    const res = await fetch(`${API}/api/invite`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -425,25 +289,41 @@ async function connectToHost() {
     return;
   }
 
-  // v1.15.0: the local server redeems the invite link against the host
-  // (server-side), receives a member token and stores hostUrl + token.
-  // Without the token the host rejects every forwarded tool call.
   try {
-    const res = await authFetch(`${API}/api/connect`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ inviteUrl: hostUrl, userName: userName || undefined }),
-    });
-    const data = await res.json();
+    // Extract tunnel URL from invite link
+    // Format: https://abc-xyz.tinyfi.sh/ui/invite/token123
+    // We need: https://abc-xyz.tinyfi.sh
+    if (hostUrl.includes('/ui/invite/')) {
+      const urlObj = new URL(hostUrl);
+      const tunnelBaseUrl = urlObj.origin;
 
-    if (data.success) {
-      showToast('success', 'Connected', `Connected to host as ${data.member?.name || 'member'}. Tools now serve host files live.`);
-      currentConfig.mode = 'remote';
-      currentConfig.hostUrl = data.hostUrl;
+      // Save tunnel URL to config. The local MCP endpoint proxies to the host
+      // server-side, so tools serve host files instantly — no restart needed.
+      await fetch(`${API}/api/config`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mode: 'remote',
+          hostUrl: tunnelBaseUrl,
+        }),
+      });
+
+      showToast('success', 'Connected', 'Tools now serve host files live. No restart needed.');
       return;
     }
 
-    showToast('error', 'Connection Failed', data.error || 'Could not connect to host');
+    // Fallback: validate as invite token
+    const token = hostUrl.split('/invite/')[1];
+    if (token) {
+      const res = await fetch(`${API}/api/invite/validate/${token}`);
+      const result = await res.json();
+
+      if (result.valid) {
+        showToast('success', 'Connected', 'Successfully connected to host');
+      } else {
+        showToast('error', 'Invalid Link', result.reason || 'This invite link is not valid');
+      }
+    }
   } catch {
     showToast('error', 'Connection Failed', 'Could not connect to host');
   }
@@ -465,7 +345,7 @@ async function saveConfig() {
   }
 
   try {
-    const res = await authFetch(`${API}/api/config`, {
+    const res = await fetch(`${API}/api/config`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(config)
@@ -497,7 +377,7 @@ async function updateUserName() {
   }
 
   try {
-    const res = await authFetch(`${API}/api/config`, {
+    const res = await fetch(`${API}/api/config`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ userName: name }),
@@ -567,7 +447,7 @@ function fallbackCopy(text) {
 
 async function loadDashboard() {
   try {
-    const res = await authFetch(`${API}/api/stats`);
+    const res = await fetch(`${API}/api/stats`);
     const data = await res.json();
 
     // Animate stat values
@@ -576,7 +456,7 @@ async function loadDashboard() {
     animateValue('stat-active-locks', data.activeLocks || 0);
 
     // Load team count
-    const teamRes = await authFetch(`${API}/api/team`);
+    const teamRes = await fetch(`${API}/api/team`);
     const teamData = await teamRes.json();
     animateValue('stat-team-members', (teamData.members || []).length);
 
@@ -689,7 +569,7 @@ async function loadChanges(page) {
     params.set('limit', String(CHANGES_PER_PAGE));
     params.set('offset', String(changesPage * CHANGES_PER_PAGE));
 
-    const res = await authFetch(`${API}/api/changes?${params}`);
+    const res = await fetch(`${API}/api/changes?${params}`);
     const data = await res.json();
 
     const container = document.getElementById('changes-list');
@@ -803,7 +683,7 @@ async function loadChanges(page) {
 
 async function loadTeam() {
   try {
-    const res = await authFetch(`${API}/api/team`);
+    const res = await fetch(`${API}/api/team`);
     const data = await res.json();
 
     // Members
@@ -869,7 +749,7 @@ async function createInvite() {
   }
 
   try {
-    const res = await authFetch(`${API}/api/invite`, {
+    const res = await fetch(`${API}/api/invite`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -907,7 +787,7 @@ function copyGeneratedInvite() {
 
 async function loadLocks() {
   try {
-    const res = await authFetch(`${API}/api/locks`);
+    const res = await fetch(`${API}/api/locks`);
     const data = await res.json();
 
     const container = document.getElementById('locks-list');
@@ -1003,21 +883,18 @@ async function saveUserName() {
   userName = name;
   localStorage.setItem('opencoop-user-name', name);
 
-  // Host may rename the server config; members only register their session
-  // name (the config endpoint requires admin and will 403 otherwise).
-  if (!currentIdentity || currentIdentity.type === 'local' || currentIdentity.isAdmin) {
-    try {
-      await authFetch(`${API}/api/config`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userName: name }),
-      });
-    } catch {}
-  }
+  // Save to server config AND register user session
+  try {
+    await fetch(`${API}/api/config`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userName: name }),
+    });
+  } catch {}
 
   // Also register in user sessions map for attribution
   try {
-    await authFetch(`${API}/api/user/register`, {
+    await fetch(`${API}/api/user/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ userName: name }),
@@ -1106,7 +983,7 @@ function formatBytes(bytes) {
 async function rollbackChange(changeId, filePath) {
   if (!confirm(`Restore "${filePath}" to how it looked BEFORE this change?\n\nThe current version is snapshotted first, so this is reversible.`)) return;
   try {
-    const res = await authFetch(`${API}/api/rollback`, {
+    const res = await fetch(`${API}/api/rollback`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ change_id: changeId }),
@@ -1132,7 +1009,7 @@ async function showSnapshotsModal(filePath) {
   modal.classList.remove('hidden');
 
   try {
-    const res = await authFetch(`${API}/api/snapshots?file=${encodeURIComponent(filePath)}&limit=20`);
+    const res = await fetch(`${API}/api/snapshots?file=${encodeURIComponent(filePath)}&limit=20`);
     const data = await res.json();
     const snaps = data.snapshots || [];
     if (snaps.length === 0) {
@@ -1157,7 +1034,7 @@ async function restoreSnapshot(encodedPath, snapshotId) {
   const filePath = decodeURIComponent(encodedPath);
   if (!confirm(`Restore "${filePath}" to this saved version?\n\nThe current version is snapshotted first, so this is reversible.`)) return;
   try {
-    const res = await authFetch(`${API}/api/rollback`, {
+    const res = await fetch(`${API}/api/rollback`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ path: filePath, snapshot_id: snapshotId }),

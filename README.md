@@ -4,7 +4,7 @@
 
 # OpenCOOP
 
-![Version](https://img.shields.io/badge/version-1.14.2-blue)
+![Version](https://img.shields.io/badge/version-1.15.0-blue)
 ![License](https://img.shields.io/badge/license-Non--Commercial-green)
 ![OpenCode](https://img.shields.io/badge/OpenCode-Plugin-purple)
 ![MCP](https://img.shields.io/badge/MCP-SSE-orange)
@@ -93,6 +93,30 @@ OpenCOOP is an **OpenCode plugin** that lets multiple developers (each with thei
 | 🌍 **Remote Access** | SSH tunnel (tinyfi.sh) — works behind NAT, firewall, or VPN |
 | 📊 **Statistics** | View changes per user, recent activity, and more |
 | 🔄 **Auto-Recovery** | Tunnel auto-reconnects, server auto-restarts on failure |
+| 🔐 **Authenticated Remote Access** | Every tunnel/LAN request requires a token; local stays frictionless. Read/write/admin permissions enforced per call |
+| 🛡️ **Hardened by Default** | Binds to 127.0.0.1, strict CORS + Host allowlist + CSRF guard, rate limiting, security event log, instant revocation |
+
+## Security
+
+OpenCOOP takes the shared-workspace boundary seriously (see [SECURITY.md](SECURITY.md)):
+
+- **Local = trusted, Remote = token.** Your own OpenCode and browser connect
+  over loopback and need no token. Anyone arriving through the public tunnel
+  (or LAN when enabled) must present a valid token.
+- **Invite redemption issues member tokens** (30 days). Permissions (`read`,
+  `write`, `admin`) are enforced for every MCP tool call and API request, and
+  re-checked against the team database on each request — revoking a member
+  cuts access immediately.
+- **The tunnel can never impersonate local.** The SSH tunnel connects to a
+  local edge proxy that stamps public traffic with a per-process secret; the
+  server refuses to treat stamped traffic as local even though it arrives
+  from `127.0.0.1`.
+- **The admin token never leaves the host** (localhost/admin views only).
+- **The server binds `127.0.0.1` by default**; LAN exposure is opt-in via
+  Settings and still requires tokens for non-local callers.
+
+Found a vulnerability? Please follow the private reporting process in
+[SECURITY.md](SECURITY.md). We credit responsible researchers.
 
 ## Installation
 
@@ -316,7 +340,7 @@ curl -s -o /dev/null -w '%{http_code} %{content_type}\n' --max-time 3 -H 'Accept
 
 ### Plugin recognized by OpenCode but UI not loading / MCP not starting
 
-1. **Plugin version too old**: Must be `1.14.2` or newer. Check with `npm ls -g @opencoop/opencode-plugin`.
+1. **Plugin version too old**: Must be `1.15.0` or newer. Check with `npm ls -g @opencoop/opencode-plugin`.
 2. **Stale plugin cache**: Clear and restart:
    ```bash
    rm -rf ~/.cache/opencode/packages/@opencoop

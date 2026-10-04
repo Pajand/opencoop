@@ -1,7 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
-import { randomUUID } from "crypto";
+import { randomUUID, randomBytes } from "crypto";
 import express from "express";
 import cors from "cors";
 import { z } from "zod";
@@ -12,12 +12,15 @@ import { ChangeTracker } from "../filesystem/change-tracker.js";
 import { AuthManager } from "../auth/auth-manager.js";
 import { SessionManager } from "../auth/session-manager.js";
 import { logger } from "../utils/logger.js";
-import { ServerConfig } from "../types/index.js";
+import { ServerConfig, AuthIdentity } from "../types/index.js";
 import { initDatabase, startAutoSave, stopAutoSave } from "../utils/database.js";
+import { loadConfig, saveConfig } from "../utils/config.js";
 import { createWebUI } from "../web/server.js";
 import { TunnelManager } from "../utils/tunnel.js";
 import { proxyForward, closeProxy } from "./host-proxy.js";
 import { buildGuideText } from "../utils/guide.js";
+import { SecurityManager, findFreePort } from "../security/guard.js";
+import { TunnelProxy } from "../security/tunnel-proxy.js";
 
 export class OpenCOOPServer {
   private config: ServerConfig;
@@ -28,8 +31,12 @@ export class OpenCOOPServer {
   private sessionManager!: SessionManager;
   private transports: Map<string, StreamableHTTPServerTransport> = new Map();
   private sseTransports: Map<string, SSEServerTransport> = new Map();
+  private sseIdentities: Map<string, AuthIdentity | null> = new Map();
   private httpServer: any = null;
   private tunnelManager: TunnelManager | null = null;
+  private tunnelProxy: TunnelProxy | null = null;
+  private security: SecurityManager | null = null;
+  private edgePort: number = 0;
 
   constructor(config: ServerConfig) {
     this.config = config;
@@ -74,6 +81,15 @@ export class OpenCOOPServer {
       const last = rest[rest.length - 1];
       if (typeof last === "function") {
         rest[rest.length - 1] = async (args: any, extra: any) => {
+          // SECURITY: enforce per-caller permissions (auth context set by the
+          // HTTP auth middleware; undefined = trusted in-process host call).
+          const denied = this.security?.toolPermissionDenied(
+            name,
+            this.security.getContextIdentity()
+          );
+          if (denied) {
+            return { content: [{ type: "text" as const, text: denied }] };
+          }
           const px = await proxyForward(name, args, this.config.port);
           if (px !== null) return { content: [{ type: "text" as const, text: px }] };
           return last(args, extra);
@@ -117,6 +133,13 @@ export class OpenCOOPServer {
   }
 
   private async callTool(name: string, args: any): Promise<string> {
+    // SECURITY: enforce per-caller permissions for the manual JSON-RPC path.
+    const denied = this.security?.toolPermissionDenied(
+      name,
+      this.security.getContextIdentity()
+    );
+    if (denied) return denied;
+
     // REMOTE mode: forward to host; HOST mode: run locally (unchanged).
     const px = await proxyForward(name, args, this.config.port);
     if (px !== null) return px;
@@ -599,6 +622,7 @@ export class OpenCOOPServer {
           port: this.config.port,
           tunnelUrl: this.tunnelManager?.getUrl() || undefined,
         });
+        this.security?.logEvent("mcp", "invite_created", `${email} [${permissions.join(",")}]`, "mcp:invite_member");
         return {
           content: [{ type: "text" as const, text: JSON.stringify(link) }],
         };
@@ -633,6 +657,7 @@ export class OpenCOOPServer {
           user_id,
           ownerId
         );
+        this.security?.logEvent("mcp", "member_revoked", user_id, "mcp:revoke_access");
         return {
           content: [
             { type: "text" as const, text: `Access revoked for user: ${user_id}` },
@@ -707,16 +732,112 @@ export class OpenCOOPServer {
     return createHash("sha256").update(content).digest("hex");
   }
 
+  /** Paths reachable WITHOUT a token (public bootstrap + static shell + health). */
+  private isPublicPath(req: express.Request): boolean {
+    const p = req.path;
+    const m = req.method;
+    if (m === "OPTIONS") return true;
+    if (m === "GET" && (p === "/health" || p === "/")) return true;
+    if (
+      m === "GET" &&
+      (p === "/ui" || p === "/ui/" || p.startsWith("/ui/assets/") || p === "/favicon.ico")
+    ) {
+      return true;
+    }
+    if (m === "GET" && /^\/ui\/invite\/[^/]+$/.test(p)) return true;
+    if (m === "GET" && /^\/ui\/api\/invite\/validate\/[^/]+$/.test(p)) return true;
+    if (m === "GET" && p === "/ui/api/health") return true;
+    if (m === "POST" && p === "/ui/api/invite/redeem") return true;
+    return false;
+  }
+
   async startHttp(port: number): Promise<void> {
     await this.initialize();
 
+    // ==================== SECURITY (v1.15.0) ====================
+    // adminToken is generated once and persisted to the global config.
+    const hadAdminToken = !!this.config.adminToken;
+    const extraHosts: string[] = [];
+    for (const u of [this.config.hostUrl]) {
+      if (!u) continue;
+      try {
+        extraHosts.push(new URL(u).hostname.toLowerCase());
+      } catch {}
+    }
+    this.security = new SecurityManager({
+      config: this.config,
+      tunnelSecret: randomBytes(32).toString("hex"),
+      lookupMember: (userId) =>
+        this.authManager.getMemberById(this.config.workspacePath, userId),
+      extraAllowedHosts: extraHosts,
+    });
+    if (!hadAdminToken) {
+      try {
+        await saveConfig(this.config);
+      } catch {}
+    }
+
     const app = express();
-    app.use(express.json());
-    app.use(cors({
-      origin: true,
-      exposedHeaders: ["mcp-session-id"],
-      allowedHeaders: ["Content-Type", "mcp-session-id", "Accept", "Mcp-Protocol-Version", "Last-Event-ID"],
-    }));
+    app.disable("x-powered-by");
+
+    // Resolve identity for every request (never blocks by itself).
+    app.use(this.security.securityHeaders);
+    app.use(this.security.contextMiddleware);
+
+    // Strict CORS: same-origin, localhost, and configured tunnel hosts only.
+    app.use(
+      cors((req: express.Request, callback: (err: Error | null, options?: any) => void) => {
+        const allowed = this.security!.corsOrigin(
+          req.headers.origin as string | undefined,
+          req.headers.host as string | undefined
+        );
+        callback(null, {
+          origin: allowed,
+          exposedHeaders: ["mcp-session-id"],
+          allowedHeaders: [
+            "Content-Type",
+            "mcp-session-id",
+            "Accept",
+            "Mcp-Protocol-Version",
+            "Last-Event-ID",
+            "Authorization",
+            "x-opencoop-client",
+          ],
+        });
+      })
+    );
+
+    app.use(express.json({ limit: "10mb" }));
+
+    // SSE /messages has no Authorization on subsequent posts — inherit the
+    // identity recorded when the SSE session was opened.
+    app.use((req: express.Request, _res: express.Response, next: express.NextFunction) => {
+      if (!(req as any).identity && req.path === "/messages") {
+        const sid = req.query.sessionId as string | undefined;
+        if (sid && this.sseIdentities.has(sid)) {
+          (req as any).identity = this.sseIdentities.get(sid) || null;
+        }
+      }
+      next();
+    });
+
+    // Auth gate: public bootstrap paths pass, everything else needs a token
+    // OR a trusted local (loopback, not tunnel-stamped) connection.
+    app.use((req: express.Request, res: express.Response, next: express.NextFunction) => {
+      if (this.isPublicPath(req)) return next();
+      this.security!.requireAuth(req, res, next);
+    });
+
+    // CSRF guard for browser mutations (custom header forces CORS preflight).
+    app.use("/ui/api", (req: express.Request, res: express.Response, next: express.NextFunction) =>
+      this.security!.csrfGuard(req, res, next)
+    );
+
+    // Publish the resolved identity into the async context so tool handlers
+    // can enforce permissions even deep inside the MCP SDK.
+    app.use((req: express.Request, _res: express.Response, next: express.NextFunction) => {
+      this.security!.runWithIdentity((req as any).identity ?? null, () => next());
+    });
 
     app.get("/health", (req, res) => {
       res.json({ status: "ok", version: "1.0.0" });
@@ -735,9 +856,11 @@ export class OpenCOOPServer {
         const server = this.createMcpServer();
         const transport = new SSEServerTransport("/messages", res);
         this.sseTransports.set(transport.sessionId, transport);
+        this.sseIdentities.set(transport.sessionId, this.security?.getIdentity(req) ?? null);
 
         transport.onclose = () => {
           this.sseTransports.delete(transport.sessionId);
+          this.sseIdentities.delete(transport.sessionId);
         };
 
         // Note: server.connect() already calls transport.start() internally.
@@ -939,9 +1062,11 @@ export class OpenCOOPServer {
           const server = this.createMcpServer();
           const transport = new SSEServerTransport("/messages", res);
           this.sseTransports.set(transport.sessionId, transport);
+          this.sseIdentities.set(transport.sessionId, this.security?.getIdentity(req) ?? null);
 
           transport.onclose = () => {
             this.sseTransports.delete(transport.sessionId);
+            this.sseIdentities.delete(transport.sessionId);
           };
 
           // Note: server.connect() already calls transport.start() internally.
@@ -1017,16 +1142,41 @@ export class OpenCOOPServer {
     const webApp = await createWebUI(
       this.config,
       () => this.tunnelManager?.getUrl() || null,
-      () => this.ensureTunnel()
+      () => this.ensureTunnel(),
+      this.security
     );
     app.use("/ui", webApp);
     app.get("/", (_req, res) => res.redirect("/ui/"));
 
-    return new Promise((resolve, reject) => {
-      this.httpServer = app.listen(port, '0.0.0.0', async () => {
-        logger.info(`OpenCOOP server listening on 0.0.0.0:${port}`);
+    // Tunnel edge proxy: the ONLY listener the public SSH tunnel can reach.
+    // It stamps every request with the per-process secret so the main server
+    // can tell public tunnel traffic apart from the user's trusted local
+    // session (both arrive from 127.0.0.1 via SSH -R).
+    try {
+      this.edgePort = await findFreePort(port + 1);
+      this.tunnelProxy = new TunnelProxy(
+        this.edgePort,
+        port,
+        this.security.getTunnelSecret()
+      );
+      await this.tunnelProxy.start();
+    } catch (err) {
+      console.log(
+        `[OpenCOOP] Tunnel edge proxy failed: ${(err as Error).message}. ` +
+          `Public invitations will not work (local mode unaffected).`
+      );
+      this.tunnelProxy = null;
+    }
 
-        // Start Cloudflare Tunnel AFTER server is listening
+    const bindAddress = this.config.bindAddress || "127.0.0.1";
+
+    return new Promise((resolve, reject) => {
+      this.httpServer = app.listen(port, bindAddress, async () => {
+        logger.info(`OpenCOOP server listening on ${bindAddress}:${port}`);
+        console.log(`[OpenCOOP] Security: local connections trusted; remote requires a token`);
+        console.log(`[OpenCOOP] Admin token: ${this.security!.getAdminToken()}`);
+
+        // Start tunnel AFTER server is listening (through the edge proxy)
         if (this.config.mode === "host") {
           await this.ensureTunnel();
         }
@@ -1049,10 +1199,14 @@ export class OpenCOOPServer {
     try {
       await closeProxy();
     } catch {}
-    // Stop Cloudflare tunnel
+    // Stop tunnel + edge proxy
     if (this.tunnelManager) {
       this.tunnelManager.stop();
       this.tunnelManager = null;
+    }
+    if (this.tunnelProxy) {
+      this.tunnelProxy.stop();
+      this.tunnelProxy = null;
     }
 
     stopAutoSave();
@@ -1089,7 +1243,10 @@ export class OpenCOOPServer {
     if (this.tunnelManager?.getUrl()) return this.tunnelManager.getUrl();
     if (!this.tunnelManager) this.tunnelManager = new TunnelManager();
     try {
-      const tunnelUrl = await this.tunnelManager.start(this.config.port);
+      // IMPORTANT: forward the tunnel to the EDGE proxy, never straight to
+      // the main server, so public traffic can be distinguished + authorized.
+      const forwardPort = this.tunnelProxy?.getPort() || this.config.port;
+      const tunnelUrl = await this.tunnelManager.start(forwardPort);
       console.log(`[OpenCOOP] Tunnel active: ${tunnelUrl}`);
       return tunnelUrl;
     } catch (err) {

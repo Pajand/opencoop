@@ -37,7 +37,7 @@
           </div>
           <div class="logo-text">
             <h1>OpenCOOP</h1>
-            <span class="version">v1.14.2</span>
+            <span class="version">v1.15.0</span>
           </div>
         </div>
       </div>
@@ -76,6 +76,7 @@
       </div>
 
       <div class="sidebar-footer">
+        <div class="identity-badge hidden" id="identity-badge" title="Your role in this project"></div>
         <div class="connection-status" id="connectionStatus">
           <div class="status-indicator"></div>
           <span class="status-text">Connecting...</span>
@@ -175,13 +176,13 @@
               </div>
             </div>
             <div class="btn-row">
-              <button class="btn btn-primary" onclick="generateInvite()">
+              <button class="btn btn-primary" onclick="generateInvite()" data-admin-only>
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
                 </svg>
                 Generate Invite Link
               </button>
-              <button class="btn btn-copy" onclick="copyInviteLink()" title="Copy invite link">
+              <button class="btn btn-copy" onclick="copyInviteLink()" title="Copy invite link" data-admin-only>
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
                 </svg>
@@ -215,7 +216,7 @@
             </button>
           </div>
 
-          <div class="save-bar" id="saveBar">
+          <div class="save-bar" id="saveBar" data-admin-only>
             <button class="btn btn-success" onclick="saveConfig()">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/>
@@ -392,7 +393,7 @@
             <p>Manage your team members and invitations</p>
           </div>
 
-          <div class="card">
+          <div class="card" data-admin-only>
             <div class="card-header">
               <h3>Invite New Member</h3>
             </div>

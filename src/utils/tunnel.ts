@@ -76,7 +76,7 @@ export class TunnelManager extends EventEmitter {
     }, delay);
   }
 
-  async start(port: number = 31313): Promise<string> {
+  async start(forwardPort: number = 31313): Promise<string> {
     if (this.publicUrl) return this.publicUrl;
     if (this.starting) {
       return new Promise((resolve) => {
@@ -92,13 +92,16 @@ export class TunnelManager extends EventEmitter {
       // Use tinyfi.sh SSH tunnel — no binary download needed, works through VPN,
       // provides HTTPS URL, no signup required.
       // -o ServerAliveInterval=60 keeps the connection alive
-      // -R 80:localhost:PORT forwards remote port 80 to local port
+      // -R 80:localhost:PORT forwards remote port 80 to local port.
+      // Security (v1.15.0): forwardPort is the TunnelProxy edge (127.0.0.1),
+      // NOT the main server. The edge stamps every request so the server can
+      // distinguish public tunnel traffic from the user's trusted local session.
       this.process = spawn("ssh", [
         "-o", "StrictHostKeyChecking=accept-new",
         "-o", "ServerAliveInterval=60",
         "-o", "ServerAliveCountMax=3",
         "-o", "ConnectTimeout=10",
-        "-R", `80:localhost:${port}`,
+        "-R", `80:localhost:${forwardPort}`,
         "tinyfi.sh"
       ], {
         stdio: ["ignore", "pipe", "pipe"]

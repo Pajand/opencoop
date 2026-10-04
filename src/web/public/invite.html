@@ -292,9 +292,39 @@
         return;
       }
 
-      // In a real implementation, this would register the user
-      alert(`Welcome ${name}! You've been added to the team with ${selectedPerms.join(', ')} permissions.`);
-      window.location.href = '/';
+      const btn = document.querySelector('.invite-btn');
+      btn.disabled = true;
+      btn.textContent = 'Joining...';
+
+      try {
+        const res = await fetch('/ui/api/invite/redeem', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-opencoop-client': 'web',
+          },
+          body: JSON.stringify({ token, userName: name, email }),
+        });
+        const data = await res.json();
+
+        if (!res.ok || !data.success) {
+          showInvalid(data.error || 'Failed to join. Ask the host for a fresh invite link.');
+          btn.disabled = false;
+          btn.textContent = 'Join Team';
+          return;
+        }
+
+        // Store the member session token — all dashboard/MCP requests use it.
+        localStorage.setItem('opencoop-member-token', data.sessionToken);
+        localStorage.setItem('opencoop-user-name', data.member?.name || name);
+        localStorage.setItem('opencoop-member-permissions', (data.member?.permissions || []).join(','));
+
+        window.location.href = '/ui/';
+      } catch {
+        showInvalid('Could not reach the host. Check your connection and try again.');
+        btn.disabled = false;
+        btn.textContent = 'Join Team';
+      }
     }
 
     validateInvite();

@@ -7,6 +7,22 @@ export interface ServerConfig {
   hostUrl?: string;
   inviteToken?: string;
   userName?: string;
+  /** Admin secret for this server (host). Auto-generated on first run. */
+  adminToken?: string;
+  /** Interface to bind. Default "127.0.0.1" (secure). "0.0.0.0" = LAN mode (auth still required for non-local). */
+  bindAddress?: string;
+  /** REMOTE mode: member access token obtained by redeeming an invite link. */
+  memberToken?: string;
+  /** REMOTE mode: member display name / permissions (cached for UI). */
+  memberName?: string;
+  memberPermissions?: string;
+}
+
+export interface AuthIdentity {
+  type: "local" | "admin" | "member";
+  userId: string;
+  userName: string;
+  permissions: string[];
 }
 
 export interface FileMetadata {

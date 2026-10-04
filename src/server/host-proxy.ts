@@ -19,7 +19,8 @@ const CALL_TIMEOUT_MS = 120000;
 
 let proxyClient: Client | null = null;
 let proxyUrl: string | null = null;
-let connecting: { target: string; promise: Promise<Client> } | null = null;
+let proxyToken: string | null = null;
+let connecting: { target: string; token: string | null; promise: Promise<Client> } | null = null;
 
 export async function getProxyTarget(): Promise<string | null> {
   try {
@@ -33,11 +34,22 @@ export async function getProxyTarget(): Promise<string | null> {
   }
 }
 
+/** Member token for the current REMOTE connection (sent as Bearer to the host). */
+export async function getMemberToken(): Promise<string | null> {
+  try {
+    const cfg = await loadConfig();
+    return cfg.memberToken || null;
+  } catch {
+    return null;
+  }
+}
+
 export async function closeProxy(): Promise<void> {
   connecting = null;
   const c = proxyClient;
   proxyClient = null;
   proxyUrl = null;
+  proxyToken = null;
   if (c) {
     try {
       await c.close();
@@ -55,11 +67,13 @@ function withTimeout<T>(p: Promise<T>, ms: number, what: string): Promise<T> {
   return Promise.race([p, timeout]).finally(() => clearTimeout(timer)) as Promise<T>;
 }
 
-async function getClient(target: string): Promise<Client> {
-  if (proxyClient && proxyUrl === target) return proxyClient;
-  if (connecting && connecting.target === target) return connecting.promise;
+async function getClient(target: string, token: string | null): Promise<Client> {
+  if (proxyClient && proxyUrl === target && proxyToken === token) return proxyClient;
+  if (connecting && connecting.target === target && connecting.token === token) {
+    return connecting.promise;
+  }
 
-  // New (or changed) target: drop everything and reconnect.
+  // New (or changed) target/token: drop everything and reconnect.
   await closeProxy();
 
   let clientRef: Client | null = null;
@@ -69,14 +83,21 @@ async function getClient(target: string): Promise<Client> {
     // NOTE: Streamable HTTP (not SSE) — plain request/response JSON survives
     // Cloudflare tunnels, while long-lived SSE streams stall (headers arrive,
     // body chunks never do). Our /mcp endpoint is stateless (no session id).
-    await client.connect(new StreamableHTTPClientTransport(new URL(`${target}/mcp`)));
+    // SECURITY (v1.15.0): include the member token so the HOST authorizes us.
+    const requestInit: RequestInit = token
+      ? { headers: { Authorization: `Bearer ${token}` } }
+      : {};
+    await client.connect(
+      new StreamableHTTPClientTransport(new URL(`${target}/mcp`), { requestInit })
+    );
     return client;
   })();
-  connecting = { target, promise };
+  connecting = { target, token, promise };
 
   try {
     proxyClient = await promise;
     proxyUrl = target;
+    proxyToken = token;
     return proxyClient;
   } catch (err) {
     // Never cache failed connections; best-effort cleanup of half-open state.
@@ -87,6 +108,7 @@ async function getClient(target: string): Promise<Client> {
     }
     proxyClient = null;
     proxyUrl = null;
+    proxyToken = null;
     throw err;
   } finally {
     if (connecting && connecting.promise === promise) connecting = null;
@@ -111,6 +133,13 @@ function errMsg(err: unknown): string {
  */
 function hostAdvice(target: string, detail: string): string {
   const d = detail.toLowerCase();
+  if (d.includes("401") || d.includes("unauthorized") || d.includes("403") || d.includes("forbidden")) {
+    return (
+      `Error: HOST REJECTED THIS CLIENT — authentication failed or your access was revoked. ` +
+      `On YOUR machine: open the OpenCOOP web UI, paste a FRESH invite link in "Connect to host" and click Connect, ` +
+      `then retry. If you were removed from the team, ask the host for a new invite link. Detail: ${detail}`
+    );
+  }
   if (d.includes("1033") || d.includes(" 530") || d.includes("tunnel error")) {
     return (
       `Error: host tunnel is reachable but the server behind it is DOWN (Cloudflare tunnel error). ` +
@@ -152,8 +181,14 @@ export async function proxyForward(toolName: string, args: any, ownPort?: number
   }
 
   let client: Client;
+  let token: string | null = null;
   try {
-    client = await withTimeout(getClient(target), CONNECT_TIMEOUT_MS, "Host connection");
+    token = await getMemberToken();
+  } catch {
+    token = null;
+  }
+  try {
+    client = await withTimeout(getClient(target, token), CONNECT_TIMEOUT_MS, "Host connection");
   } catch (err) {
     return hostAdvice(target, errMsg(err));
   }

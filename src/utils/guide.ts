@@ -49,6 +49,11 @@ Paths are RELATIVE to the workspace root. Example: to edit "${ctx.workspacePath}
 - Every change is audit-logged with your name. Use view_changes to see what teammates did. Use who_is_online / list_members to see the team.
 - If two people must touch the same area, edit small sections with edit_file (NOT full rewrites with write_file) to reduce conflicts.
 
+=== STEP 3b — SECURITY & PERMISSIONS ===
+- Remote team members authenticate by redeeming an invite link; their access token lives in the local OpenCOOP config. NEVER print, paste, or share tokens.
+- Permissions are enforced by the host: read-only members cannot write/edit/rollback. If a tool returns "Access denied ... requires write permission", tell the user to ask the host for a new invite with write permission — do NOT retry in a loop.
+- If tools return "HOST REJECTED THIS CLIENT" or "authentication failed", the invite expired or access was revoked: ask the user to open their OpenCOOP web UI, paste a FRESH invite link in "Connect to host", click Connect, then retry.
+
 === STEP 4 — MISTAKES & ROLLBACK (self-healing) ===
 Every write_file / edit_file AUTOMATICALLY saves a snapshot of the previous version. If something goes wrong, fix it YOURSELF with these tools — do not wait for the human:
 - WHEN to rollback: (1) you broke a file with write/edit, (2) the result looks wrong after your change, (3) tests/lint fail because of your edit, (4) the user says undo / revert / restore / rollback / "bring back".
