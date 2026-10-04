@@ -216,12 +216,12 @@ async function main() {
       reason: z.string().optional().describe("Brief description of what you plan to do"),
     },
     async ({ path, reason }) => {
-      const userId = "user-" + randomUUID().slice(0, 8);
       const sessionId = randomUUID();
       const result = await lockManager.acquireLock({
         workspaceId: config.workspacePath,
         filePath: path,
-        userId,
+        userId: "local-host",
+        userName: config.userName || "local-host",
         sessionId,
         reason,
       });
@@ -233,15 +233,18 @@ async function main() {
 
   mcpServer.tool(
     "unlock_file",
-    "Release a lock on a file after editing.",
+    "Release a lock on a file after editing. Reports the truth about whether the lock was actually released.",
     {
       path: z.string().describe("File path to unlock"),
     },
     async ({ path }) => {
-      const userId = "user-" + randomUUID().slice(0, 8);
-      await lockManager.releaseLock(config.workspacePath, path, userId);
+      const result = await lockManager.releaseLock(config.workspacePath, path, "local-host", { force: true });
+      let text: string;
+      if (result.released) text = `Lock released for: ${path}`;
+      else if (result.reason === "not-held") text = `No active lock on ${path} — nothing to release.`;
+      else text = `Could NOT release ${path}: it is locked by ${result.heldBy?.userName || "another user"}.`;
       return {
-        content: [{ type: "text" as const, text: `Lock released for: ${path}` }],
+        content: [{ type: "text" as const, text }],
       };
     }
   );

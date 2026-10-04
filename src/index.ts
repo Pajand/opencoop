@@ -205,23 +205,23 @@ const plugin: PluginModule = {
       );
 
       tools.lock_file = defineTool(
-        "Acquire an exclusive lock on a file before editing. Prevents other users from editing the same file simultaneously.",
+        "Acquire an exclusive lock on a file before editing, so teammates do not edit it simultaneously. Re-locking your own file just refreshes the lock. Always unlock_file when done (or it expires in 30 minutes).",
         { path: z.string(), reason: z.string().optional() },
         async (args: any, _ctx: any) => {
-          const uid = userId();
           const sessionId = randomUUID();
-          const result = await lockManager.acquireLock({ workspaceId: workspacePath, filePath: args.path, userId: uid, sessionId, reason: args.reason });
+          const result = await lockManager.acquireLock({ workspaceId: workspacePath, filePath: args.path, userId: "local-host", userName: config.userName || "local-host", sessionId, reason: args.reason });
           return JSON.stringify(result);
         }
       );
 
       tools.unlock_file = defineTool(
-        "Release a lock on a file after editing.",
+        "Release your lock on a file after editing. Reports the truth about whether the lock was actually released.",
         { path: z.string() },
         async (args: any, _ctx: any) => {
-          const uid = userId();
-          await lockManager.releaseLock(workspacePath, args.path, uid);
-          return `Lock released for: ${args.path}`;
+          const result = await lockManager.releaseLock(workspacePath, args.path, "local-host", { force: true });
+          if (result.released) return `Lock released for: ${args.path}`;
+          if (result.reason === "not-held") return `No active lock on ${args.path} — nothing to release.`;
+          return `Could NOT release ${args.path}: it is locked by ${result.heldBy?.userName || "another user"}.`;
         }
       );
 

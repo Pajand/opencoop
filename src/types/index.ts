@@ -48,6 +48,7 @@ export interface AcquireLockParams {
   workspaceId: string;
   filePath: string;
   userId: string;
+  userName?: string;
   sessionId: string;
   reason?: string;
 }

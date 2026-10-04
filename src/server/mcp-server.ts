@@ -184,12 +184,17 @@ export class OpenCOOPServer {
           return JSON.stringify(await this.fileManager.getDirectoryTree(args.path || ".", { maxDepth: args.max_depth, excludePatterns: args.exclude }), null, 2);
         case "lock_file": {
           const sessionId = randomUUID();
-          const lockResult = await this.lockManager.acquireLock({ workspaceId: this.config.workspacePath, filePath: args.path, userId, sessionId, reason: args.reason });
+          const { userId: lockUid, userName: lockName } = this.lockIdentity(args);
+          const lockResult = await this.lockManager.acquireLock({ workspaceId: this.config.workspacePath, filePath: args.path, userId: lockUid, userName: lockName, sessionId, reason: args.reason });
           return JSON.stringify(lockResult);
         }
-        case "unlock_file":
-          await this.lockManager.releaseLock(this.config.workspacePath, args.path, userId);
-          return `Lock released for: ${args.path}`;
+        case "unlock_file": {
+          const { userId: lockUid2, isAdmin: lockAdmin } = this.lockIdentity(args);
+          const unlockResult = await this.lockManager.releaseLock(this.config.workspacePath, args.path, lockUid2, { force: lockAdmin });
+          if (unlockResult.released) return `Lock released for: ${args.path}`;
+          if (unlockResult.reason === "not-held") return `No active lock on ${args.path} — nothing to release.`;
+          return `Could NOT release ${args.path}: it is locked by ${unlockResult.heldBy?.userName || "another user"}. Ask them to unlock it, or wait for the lock to expire (30 min).`;
+        }
         case "list_locks":
           return JSON.stringify(await this.lockManager.getActiveLocks(this.config.workspacePath), null, 2);
         case "check_lock":
@@ -398,24 +403,49 @@ export class OpenCOOPServer {
     );
   }
 
+  /**
+   * Stable lock identity (v1.15.2): every tool call used to generate a random
+   * userId, so unlock never matched the owner and acquire saw the same user
+   * as "someone else". Identity now comes from the auth context (stable per
+   * member / local host), falling back to the configured host name.
+   */
+  private lockIdentity(args?: any): { userId: string; userName: string; isAdmin: boolean } {
+    const ident = this.security?.getContextIdentity();
+    if (ident) {
+      return {
+        userId: ident.userId,
+        userName: ident.userName,
+        isAdmin: ident.permissions.includes("admin"),
+      };
+    }
+    return {
+      userId: "local-host",
+      userName:
+        this.config.userName ||
+        (args?._opencoop_user as string) ||
+        "local-host",
+      isAdmin: true,
+    };
+  }
+
   private registerLockTools(server: McpServer) {
     server.tool(
       "lock_file",
-      "Acquire an exclusive lock on a file before editing. Prevents other users from editing the same file simultaneously.",
+      "Acquire an exclusive lock on a file before editing, so teammates do not edit it simultaneously. Re-locking your own file just refreshes the lock. Always unlock_file when done (or it expires in 30 minutes).",
       {
         path: z.string().describe("File path to lock"),
         reason: z.string().optional().describe("Brief description of what you plan to do"),
         _opencoop_user: z.string().optional().describe("Remote user's display name (injected by proxy)"),
       },
       async ({ path, reason, _opencoop_user }) => {
-        const userId = "user-" + randomUUID().slice(0, 8);
-        const userName = this.resolveUserName({ _opencoop_user }, userId);
+        const { userId, userName } = this.lockIdentity({ _opencoop_user });
         const sessionId = randomUUID();
 
         const result = await this.lockManager.acquireLock({
           workspaceId: this.config.workspacePath,
           filePath: path,
           userId,
+          userName,
           sessionId,
           reason,
         });
@@ -428,19 +458,32 @@ export class OpenCOOPServer {
 
     server.tool(
       "unlock_file",
-      "Release a lock on a file after editing.",
+      "Release your lock on a file after editing. Reports the truth: if the lock belongs to a teammate you cannot release it (admins can force-release); if there is no lock it says so.",
       {
         path: z.string().describe("File path to unlock"),
       },
       async ({ path }) => {
-        const userId = "user-" + randomUUID().slice(0, 8);
-        await this.lockManager.releaseLock(
+        const { userId, isAdmin } = this.lockIdentity();
+        const result = await this.lockManager.releaseLock(
           this.config.workspacePath,
           path,
-          userId
+          userId,
+          { force: isAdmin }
         );
+
+        let text: string;
+        if (result.released) {
+          text = `Lock released for: ${path}`;
+        } else if (result.reason === "not-held") {
+          text = `No active lock on ${path} — nothing to release.`;
+        } else {
+          text =
+            `Could NOT release ${path}: it is locked by ${result.heldBy?.userName || "another user"}. ` +
+            `Ask them to unlock it, or wait for the lock to expire (30 min).`;
+        }
+
         return {
-          content: [{ type: "text" as const, text: `Lock released for: ${path}` }],
+          content: [{ type: "text" as const, text }],
         };
       }
     );

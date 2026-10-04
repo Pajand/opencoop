@@ -602,7 +602,7 @@ export async function createWebUI(
       mode: config.mode,
       workspace: config.workspacePath,
       port: config.port,
-      version: "1.15.1",
+      version: "1.15.2",
       uptime: process.uptime(),
     });
   });

@@ -27,6 +27,13 @@ export class LockManager {
       )
     `);
 
+    // Migration: display name column (for showing WHO holds a lock).
+    try {
+      runQuery(`ALTER TABLE file_locks ADD COLUMN user_name TEXT`);
+    } catch {
+      // Column already exists — ignore
+    }
+
     runQuery(`
       CREATE INDEX IF NOT EXISTS idx_locks_workspace
         ON file_locks(workspace_id)
@@ -51,6 +58,7 @@ export class LockManager {
       workspace_id: string;
       file_path: string;
       user_id: string;
+      user_name: string | null;
       session_id: string;
       lock_type: string;
       reason: string | null;
@@ -69,16 +77,20 @@ export class LockManager {
             id: existingLock.id,
             filePath: existingLock.file_path,
             userId: existingLock.user_id,
-            userName: existingLock.user_id,
+            userName: existingLock.user_name || existingLock.user_id,
             reason: existingLock.reason || "No reason provided",
             acquiredAt: new Date(existingLock.acquired_at),
             expiresAt: new Date(existingLock.expires_at),
           },
-          message: `File is locked by another user. Reason: ${existingLock.reason || "Not specified"}`,
+          message:
+            `File is locked by ${existingLock.user_name || existingLock.user_id}. ` +
+            `Reason: ${existingLock.reason || "Not specified"}. ` +
+            `Wait for them to unlock (or lock expiry, 30 min).`,
         };
       }
     }
 
+    // Same user re-acquiring (or refreshing) their own lock: replace it.
     runQuery(
       "DELETE FROM file_locks WHERE workspace_id = ? AND file_path = ? AND user_id = ?",
       [params.workspaceId, params.filePath, params.userId]
@@ -88,13 +100,14 @@ export class LockManager {
     const expiresAt = new Date(Date.now() + LOCK_TTL_MINUTES * 60 * 1000);
 
     runQuery(
-      `INSERT INTO file_locks (id, workspace_id, file_path, user_id, session_id, reason, expires_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO file_locks (id, workspace_id, file_path, user_id, user_name, session_id, reason, expires_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         lockId,
         params.workspaceId,
         params.filePath,
         params.userId,
+        params.userName || null,
         params.sessionId,
         params.reason || null,
         expiresAt.toISOString(),
@@ -105,7 +118,7 @@ export class LockManager {
       id: lockId,
       filePath: params.filePath,
       userId: params.userId,
-      userName: params.userId,
+      userName: params.userName || params.userId,
       reason: params.reason || "",
       acquiredAt: new Date(),
       expiresAt,
@@ -114,19 +127,39 @@ export class LockManager {
     return {
       granted: true,
       lock,
-      message: `Lock acquired for: ${params.filePath}`,
+      message: `Lock acquired for: ${params.filePath} (held by ${lock.userName})`,
     };
   }
 
+  /**
+   * Release a lock. Returns what actually happened so callers can report
+   * the truth to the AI (the old API silently "succeeded" even when the
+   * lock belonged to someone else).
+   */
   async releaseLock(
     workspaceId: string,
     filePath: string,
-    userId: string
-  ): Promise<void> {
+    userId: string,
+    opts?: { force?: boolean }
+  ): Promise<{
+    released: boolean;
+    reason: "released" | "not-held" | "not-owner";
+    heldBy?: LockInfo;
+  }> {
+    await this.cleanupExpiredLocks(workspaceId);
+
+    const existing = await this.checkLock(workspaceId, filePath);
+    if (!existing) return { released: false, reason: "not-held" };
+
+    if (existing.userId !== userId && !opts?.force) {
+      return { released: false, reason: "not-owner", heldBy: existing };
+    }
+
     runQuery(
-      "DELETE FROM file_locks WHERE workspace_id = ? AND file_path = ? AND user_id = ?",
-      [workspaceId, filePath, userId]
+      "DELETE FROM file_locks WHERE workspace_id = ? AND file_path = ?",
+      [workspaceId, filePath]
     );
+    return { released: true, reason: "released" };
   }
 
   async checkLock(
@@ -137,6 +170,7 @@ export class LockManager {
       id: string;
       file_path: string;
       user_id: string;
+      user_name: string | null;
       reason: string | null;
       acquired_at: string;
       expires_at: string;
@@ -156,7 +190,7 @@ export class LockManager {
       id: lock.id,
       filePath: lock.file_path,
       userId: lock.user_id,
-      userName: lock.user_id,
+      userName: lock.user_name || lock.user_id,
       reason: lock.reason || "",
       acquiredAt: new Date(lock.acquired_at),
       expiresAt: new Date(lock.expires_at),
@@ -170,6 +204,7 @@ export class LockManager {
       id: string;
       file_path: string;
       user_id: string;
+      user_name: string | null;
       reason: string | null;
       acquired_at: string;
       expires_at: string;
@@ -182,7 +217,7 @@ export class LockManager {
       id: lock.id,
       filePath: lock.file_path,
       userId: lock.user_id,
-      userName: lock.user_id,
+      userName: lock.user_name || lock.user_id,
       reason: lock.reason || "",
       acquiredAt: new Date(lock.acquired_at),
       expiresAt: new Date(lock.expires_at),

@@ -155,9 +155,11 @@ export class SecurityManager {
   }
 
   private deriveAdminToken(): string {
+    // Derived from jwtSecret ONLY (stable across workspace switches) — the
+    // secret is unique per install and never leaves the machine.
     return crypto
       .createHash("sha256")
-      .update(`opencoop-admin-v1:${this.config.jwtSecret}:${this.config.workspacePath}`)
+      .update(`opencoop-admin-v1:${this.config.jwtSecret}`)
       .digest("hex");
   }
 
