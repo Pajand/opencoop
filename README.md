@@ -379,6 +379,24 @@ curl -s -o /dev/null -w '%{http_code} %{content_type}\n' --max-time 3 -H 'Accept
 
 Open the web UI (`http://localhost:31313/ui`), select HOST or REMOTE mode and configure your project folder. Tools need a configured workspace before they can read/write files.
 
+## Support the project
+
+OpenCOOP is built and maintained by one developer, with no company behind it.
+If it saves your team time, **a star is the whole marketing budget**:
+
+[![Star OpenCOOP](https://img.shields.io/github/stars/Pajand/opencoop?style=social&label=Star%20OpenCOOP)](https://github.com/Pajand/opencoop/stargazers)
+
+A star also gets us into the [awesome-opencode](https://github.com/awesome-opencode/awesome-opencode)
+catalog, which is how most people find OpenCode plugins. It takes ten seconds
+and it genuinely moves the project.
+
+Other ways to help, if a star feels cheap:
+
+- **Report a bug** — especially security issues; the last one (unauthenticated MCP
+  transport) came from a user and is now documented in [SECURITY.md](SECURITY.md).
+- **Tell one person** who runs OpenCode with a team.
+- **Write about it** — a post, a gist, a comment. Anything that links back here.
+
 ## Contributing
 
 Contributions are welcome! Please read the contributing guidelines first.
