@@ -42,6 +42,23 @@ OpenCOOP distinguishes **trusted local** traffic from **remote** traffic:
   CSRF guard header for browser mutations, rate limiting, security event log,
   and `.opencoop/` project store blocked from file tools.
 
+## Verifying the fixes
+
+The hardening above is covered by a reproducible acceptance suite, so you do not
+have to take it on trust:
+
+```bash
+npx vitest run tests/unit/security.test.ts
+# ✓ 47 tests passed
+```
+
+The suite builds a real express app on a real ephemeral port and asserts the
+exact failure modes of the reported issue: loopback trust vs tunnel traffic
+(both arrive from `127.0.0.1`), forged vs genuine tunnel stamps, admin-token
+derivation, member-token workspace binding, instant revocation, permissions
+read from the database rather than the token, per-tool enforcement, the CSRF
+header, the Host-header allowlist, CORS, rate limiting and the event log.
+
 ## Acknowledgements
 
 We thank the following researchers for responsibly disclosing issues:

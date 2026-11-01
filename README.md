@@ -9,9 +9,9 @@
 ![OpenCode](https://img.shields.io/badge/OpenCode-Plugin-purple)
 ![MCP](https://img.shields.io/badge/MCP-SSE-orange)
 ![Node](https://img.shields.io/badge/Node.js-18+-black)
-![Users](https://img.shields.io/badge/Up%20to%2050%20users-red)
+![Users](https://img.shields.io/badge/Teams-tested%20at%2050%20users-red)
 
-**Real-time team collaboration for OpenCode — up to 50 developers on the same project.**
+**Real-time team collaboration for OpenCode — a whole team on the same project.**
 
 [Getting Started](#installation) • [Documentation](#features) • [Contributing](#contributing)
 
@@ -73,14 +73,15 @@ OpenCOOP is an **OpenCode plugin** that lets multiple developers (each with thei
 - **Admin Dashboard**: Manage team members, permissions, and access
 - **Conflict Resolution**: Smart merge when two users edit the same lines
 
-**Up to 50 developers** can collaborate simultaneously with full audit trails.
+Teams of dozens work simultaneously with full audit trails. ("Up to 50" is the design
+budget we test against, not an enforced seat limit — invites have no per-team cap.)
 
 ## Features
 
 | Feature | Description |
 |---------|-------------|
 | 🔗 **Shared MCP Server** | Multiple OpenCode instances share the same project |
-| 👥 **Up to 50 Users** | Real-time collaboration with dozens of team members |
+| 👥 **Team Scale** | Real-time collaboration with dozens of members; no seat limit in code |
 | 📝 **Change Tracking** | Every file modification is logged with user attribution |
 | 📸 **Auto Snapshots** | Every write/edit saves the previous version (last 20 per file, 2MB cap, binaries skipped) |
 | ↩️ **One-Click Rollback** | Restore any file from Changes page, or let the AI undo its own mistakes via `rollback_file` |
@@ -194,7 +195,7 @@ Then add to your `~/.config/opencode/opencode.json`:
 1. Select **HOST** mode in the web UI
 2. Choose your **project folder**
 3. Click **Generate Invite Link**
-4. **Share** the link with your team (up to 50 members)
+4. **Share** the link with your team
 
 The invite link uses an **automatic SSH tunnel** via tinyfi.sh (`https://xxx.tinyfi.sh`), so team members can connect even behind NAT, firewall, or VPN.
 
@@ -249,7 +250,7 @@ Once connected, your AI has access to 15 tools:
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                        Team Members (Up to 50)                    │
+│                        Team Members (any size)                     │
 │  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐        │
 │  │ Member A │  │ Member B │  │ Member C │  │ Member N │        │
 │  │ OpenCode │  │ OpenCode │  │ OpenCode │  │ OpenCode │        │
