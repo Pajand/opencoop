@@ -1,6 +1,6 @@
 {
   "name": "@opencoop/opencode-plugin",
-  "version": "1.15.2",
+  "version": "1.16.0",
   "description": "OpenCode plugin for team collaboration via shared file system",
   "type": "module",
   "main": "dist/index.js",
@@ -56,6 +56,15 @@
     "@types/diff": "^6.0.0",
     "typescript": "^5.7.0",
     "tsx": "^4.19.0",
-    "vitest": "^3.0.0"
+    "vitest": "^3.0.0",
+    "@opencode/plugin": "^2.0.32"
+  },
+  "peerDependencies": {
+    "@opencode/plugin": ">=2.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@opencode/plugin": {
+      "optional": true
+    }
   }
 }

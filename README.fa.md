@@ -4,7 +4,7 @@
 
 # اوپن‌کوپ
 
-![Version](https://img.shields.io/badge/version-1.15.2-blue)
+![Version](https://img.shields.io/badge/version-1.16.0-blue)
 ![License](https://img.shields.io/badge/license-Non--Commercial-green)
 ![OpenCode](https://img.shields.io/badge/OpenCode-Plugin-purple)
 ![MCP](https://img.shields.io/badge/MCP-SSE-orange)
@@ -118,6 +118,8 @@ npm install -g @opencoop/opencode-plugin
 
 سپس در فایل `~/.config/opencode/opencode.json` اضافه کنید:
 
+**OpenCode V1** (کلید `plugin`):
+
 ```json
 {
   "plugin": ["@opencoop/opencode-plugin"],
@@ -130,6 +132,16 @@ npm install -g @opencoop/opencode-plugin
   }
 }
 ```
+
+**OpenCode V2** (کلید `plugins` — همان پکیج، هر دو نسل پشتیبانی می‌شوند):
+
+```json
+{
+  "plugins": ["@opencoop/opencode-plugin"]
+}
+```
+
+> اوپن‌کوپ **دو entry point (V1 + V2)** دارد: یک پکیج روی هر دو نسل OpenCode کار می‌کند. در V2 پلاگین ابزارهایش را از طریق Promise plugin API ثبت می‌کند؛ نیازی به بلاک MCP نیست.
 
 ### نصب از GitHub
 
@@ -329,7 +341,7 @@ curl -s -o /dev/null -w '%{http_code} %{content_type}\n' --max-time 3 -H 'Accept
 
 ### پلاگین شناخته شده ولی UI بالا نمیاد / MCP شروع نمیشه
 
-1. **نسخه پلاگین خیلی قدیمیه**: باید `1.15.2` یا بالاتر باشه.
+1. **نسخه پلاگین خیلی قدیمیه**: باید `1.16.0` یا بالاتر باشه.
 2. **کش قدیمی پلاگین**:
    ```bash
    rm -rf ~/.cache/opencode/packages/@opencoop

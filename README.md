@@ -4,7 +4,7 @@
 
 # OpenCOOP
 
-![Version](https://img.shields.io/badge/version-1.15.2-blue)
+![Version](https://img.shields.io/badge/version-1.16.0-blue)
 ![License](https://img.shields.io/badge/license-Non--Commercial-green)
 ![OpenCode](https://img.shields.io/badge/OpenCode-Plugin-purple)
 ![MCP](https://img.shields.io/badge/MCP-SSE-orange)
@@ -128,6 +128,8 @@ npm install -g @opencoop/opencode-plugin
 
 Then add to your `~/.config/opencode/opencode.json`:
 
+**OpenCode V1** (`plugin` key):
+
 ```json
 {
   "plugin": ["@opencoop/opencode-plugin"],
@@ -140,6 +142,18 @@ Then add to your `~/.config/opencode/opencode.json`:
   }
 }
 ```
+
+**OpenCode V2** (`plugins` key — same package, both generations supported):
+
+```json
+{
+  "plugins": ["@opencoop/opencode-plugin"]
+}
+```
+
+> OpenCOOP ships **dual V1 + V2 entry points**: one package works on both
+> OpenCode generations. On V2 the plugin registers its tools through the
+> Promise plugin API; no MCP block is needed.
 
 ### Install from GitHub
 
@@ -340,7 +354,7 @@ curl -s -o /dev/null -w '%{http_code} %{content_type}\n' --max-time 3 -H 'Accept
 
 ### Plugin recognized by OpenCode but UI not loading / MCP not starting
 
-1. **Plugin version too old**: Must be `1.15.2` or newer. Check with `npm ls -g @opencoop/opencode-plugin`.
+1. **Plugin version too old**: Must be `1.16.0` or newer. Check with `npm ls -g @opencoop/opencode-plugin`.
 2. **Stale plugin cache**: Clear and restart:
    ```bash
    rm -rf ~/.cache/opencode/packages/@opencoop
